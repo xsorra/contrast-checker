@@ -1,0 +1,1609 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Contrast Checker</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,300;0,400;1,300;1,400&family=DM+Sans:opsz,wght@9..40,300;9..40,400;9..40,500;9..40,600&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+*, *::before, *::after { margin: 0; padding: 0; box-sizing: border-box; }
+
+:root {
+  --blue: #1a6cff;
+  --blue-dim: rgba(26,108,255,0.12);
+  --blue-border: rgba(26,108,255,0.2);
+  --dark: #0a0a14;
+  --white: #ffffff;
+  --glass: rgba(255,255,255,0.72);
+  --glass-border: rgba(255,255,255,0.9);
+  --muted: rgba(10,10,20,0.45);
+  --card-bg: rgba(255,255,255,0.65);
+  --pass-green: #10b981;
+  --pass-bg: rgba(16,185,129,0.04);
+  --pass-border: rgba(16,185,129,0.12);
+  --fail-red: #ef4444;
+  --fail-bg: rgba(239,68,68,0.04);
+  --fail-border: rgba(239,68,68,0.12);
+  --warn-orange: #f59e0b;
+  --fg-dynamic: #0000FF;
+  --bg-dynamic: #FFFFFF;
+}
+
+html { scroll-behavior: smooth; }
+
+body {
+  font-family: 'DM Sans', sans-serif;
+  background: var(--bg-dynamic);
+  color: var(--fg-dynamic);
+  min-height: 100vh;
+  overflow-x: hidden;
+  
+  transition: background 0.4s ease, color 0.4s ease;
+}
+
+/* ─── CURSOR ─── */
+
+/* ─── MESH BG ─── */
+#meshCanvas { position: fixed; inset: 0; width: 100%; height: 100%; z-index: 0; }
+
+/* ─── LAYOUT ─── */
+.app {
+  position: relative;
+  z-index: 10;
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+}
+
+main {
+  flex: 1;
+  padding: 48px 24px 80px;
+  max-width: 860px;
+  margin: 0 auto;
+  width: 100%;
+}
+
+/* ─── NAV ─── */
+nav {
+  position: sticky;
+  top: 0;
+  z-index: 100;
+  padding: 16px 32px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  background: color-mix(in srgb, var(--bg-dynamic) 80%, transparent);
+  backdrop-filter: blur(20px);
+  -webkit-backdrop-filter: blur(20px);
+  border-bottom: 1px solid color-mix(in srgb, var(--fg-dynamic) 6%, transparent);
+  animation: fadeDown 0.7s 0.2s cubic-bezier(0.16,1,0.3,1) both;
+  transition: background 0.3s ease, border-color 0.3s ease;
+}
+.nav-logo {
+  font-family: 'DM Sans', sans-serif;
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--fg-dynamic);
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  transition: color 0.3s ease;
+}
+.nav-logo-dot {
+  width: 8px; height: 8px;
+  background: var(--fg-dynamic);
+  border-radius: 50%;
+  animation: pulse 2.5s infinite;
+  transition: background 0.3s ease;
+}
+
+/* ─── HEADER ─── */
+.page-header {
+  margin-bottom: 40px;
+  animation: fadeUp 0.8s 0.2s cubic-bezier(0.16,1,0.3,1) both;
+}
+.page-header h1 {
+  font-family: 'Cormorant Garamond', serif;
+  font-size: clamp(48px, 6vw, 72px);
+  font-weight: 300;
+  letter-spacing: -0.04em;
+  color: var(--fg-dynamic);
+  line-height: 1.0;
+  transition: color 0.3s ease;
+}
+.page-header h1 em { font-style: italic; color: var(--fg-dynamic); opacity: 0.7; }
+.page-header p {
+  font-size: 15px;
+  color: var(--fg-dynamic);
+  margin-top: 10px;
+  font-weight: 300;
+  opacity: 0.5;
+  transition: color 0.3s ease;
+}
+
+/* ─── COLOR PICKER CARDS ─── */
+.main-grid {
+  display: grid;
+  grid-template-columns: 1fr auto 1fr;
+  gap: 0;
+  margin-bottom: 16px;
+  align-items: center;
+  animation: fadeUp 0.8s 0.3s cubic-bezier(0.16,1,0.3,1) both;
+  position: relative;
+  z-index: 2;
+}
+
+.color-card {
+  background: #ffffff;
+  backdrop-filter: blur(24px);
+  -webkit-backdrop-filter: blur(24px);
+  border: 1px solid rgba(255,255,255,0.9);
+  border-radius: 24px;
+  padding: 24px 24px 28px;
+  box-shadow: 0 4px 24px rgba(0,0,0,0.04);
+  transition: box-shadow 0.3s ease;
+  overflow: visible;
+  position: relative;
+  z-index: 1;
+}
+.color-card:has(.custom-picker.open) { z-index: 50; }
+.color-card:hover { box-shadow: 0 8px 40px rgba(0,0,0,0.08); }
+
+.color-card-label {
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: rgba(10,10,20,0.45);
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 16px;
+}
+.color-card-label span {
+  width: 18px; height: 18px;
+  display: flex; align-items: center; justify-content: center;
+  color: rgba(10,10,20,0.45);
+}
+.color-card-label span svg { width: 16px; height: 16px; }
+
+/* Swatch */
+.color-swatch-wrapper {
+  position: relative;
+  width: 100%;
+  border-radius: 16px;
+  border: 1px solid transparent;
+  transition: border-color 0.2s ease;
+  overflow: visible;
+}
+.color-swatch-wrapper.light-swatch {
+  border-color: rgba(0,0,0,0.1);
+}
+.color-swatch-display {
+  width: 100%;
+  height: 120px;
+  border-radius: 16px;
+  
+  position: relative;
+  overflow: hidden;
+}
+
+/* Custom Color Picker */
+.custom-picker {
+  display: none;
+  position: absolute;
+  top: calc(100% + 8px);
+  left: 0;
+  width: 100%;
+  z-index: 500;
+  background: color-mix(in srgb, var(--bg-dynamic) 92%, var(--fg-dynamic) 3%);
+  backdrop-filter: blur(32px);
+  -webkit-backdrop-filter: blur(32px);
+  border: 1px solid var(--glass-border);
+  border-radius: 16px;
+  padding: 12px;
+  box-shadow: 0 12px 48px rgba(0,0,0,0.18), 0 0 0 1px rgba(255,255,255,0.5);
+  
+}
+.custom-picker.open { display: block; }
+
+.picker-sv-area {
+  width: 100%;
+  height: 160px;
+  border-radius: 10px;
+  position: relative;
+  
+  overflow: hidden;
+}
+.picker-sv-area canvas {
+  width: 100%;
+  height: 100%;
+  border-radius: 10px;
+  display: block;
+}
+.picker-sv-cursor {
+  position: absolute;
+  width: 16px; height: 16px;
+  border: 2px solid white;
+  border-radius: 50%;
+  box-shadow: 0 0 4px rgba(0,0,0,0.4);
+  pointer-events: none;
+  transform: translate(-50%, -50%);
+}
+
+.picker-hue-strip {
+  width: 100%;
+  height: 16px;
+  border-radius: 100px;
+  margin-top: 10px;
+  position: relative;
+  
+  background: linear-gradient(to right, #ff0000, #ffff00, #00ff00, #00ffff, #0000ff, #ff00ff, #ff0000);
+}
+.picker-hue-thumb {
+  position: absolute;
+  top: 50%;
+  width: 14px; height: 14px;
+  border: 2px solid white;
+  border-radius: 50%;
+  box-shadow: 0 0 4px rgba(0,0,0,0.3);
+  pointer-events: none;
+  transform: translate(-50%, -50%);
+}
+
+.color-info {
+  position: absolute;
+  bottom: 0; left: 0;
+  width: 100%;
+  padding: 14px 16px;
+  background: none;
+  border-radius: 0 0 16px 16px;
+  pointer-events: none;
+}
+.color-name {
+  font-family: 'DM Sans', sans-serif;
+  font-size: 15px;
+  font-weight: 600;
+  letter-spacing: -0.01em;
+}
+.color-name-hex {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 12px;
+  opacity: 0.75;
+  margin-top: 2px;
+}
+
+/* Hex input row */
+.hex-input-row {
+  display: flex;
+  gap: 8px;
+  margin-top: 12px;
+}
+.hex-input-wrapper {
+  flex: 1;
+  position: relative;
+  display: flex;
+  align-items: center;
+}
+.hex-prefix {
+  position: absolute;
+  left: 14px;
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 14px;
+  font-weight: 500;
+  color: #0a0a14;
+  pointer-events: none;
+}
+.hex-input {
+  width: 100%;
+  padding: 11px 14px 11px 28px;
+  background: #f5f5f7;
+  border: 1px solid #e5e5ea;
+  border-radius: 14px;
+  box-shadow: none;
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 14px;
+  font-weight: 500;
+  color: #0a0a14;
+  outline: none;
+  transition: all 0.25s cubic-bezier(0.16,1,0.3,1);
+  text-transform: uppercase;
+  
+}
+.hex-input:focus {
+  background: #ffffff;
+  border-color: rgba(26,108,255,0.3);
+  box-shadow: 0 0 0 3px rgba(26,108,255,0.07), 0 4px 16px rgba(26,108,255,0.08);
+}
+
+.random-btn {
+  width: 42px; height: 42px;
+  border-radius: 14px;
+  background: #f5f5f7;
+  border: 1px solid #e5e5ea;
+  box-shadow: none;
+  
+  display: flex; align-items: center; justify-content: center;
+  color: rgba(10,10,20,0.45);
+  transition: all 0.25s cubic-bezier(0.16,1,0.3,1);
+  flex-shrink: 0;
+}
+.random-btn:hover {
+  color: #1a6cff;
+  border-color: rgba(26,108,255,0.2);
+  box-shadow: 0 4px 16px rgba(26,108,255,0.12);
+}
+.random-btn svg { width: 18px; height: 18px; }
+
+/* ─── LIGHTNESS SLIDER ─── */
+.lightness-slider-row {
+  margin-top: 10px;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+.lightness-slider-label {
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: rgba(10,10,20,0.4);
+  flex-shrink: 0;
+  width: 18px;
+  text-align: center;
+}
+.lightness-slider-label svg { width: 14px; height: 14px; }
+.lightness-slider-wrap {
+  flex: 1;
+  position: relative;
+  height: 24px;
+  display: flex;
+  align-items: center;
+}
+.lightness-slider-track {
+  width: 100%;
+  height: 12px;
+  border-radius: 100px;
+  border: 1px solid #e5e5ea;
+  position: absolute;
+  pointer-events: none;
+}
+.lightness-slider {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 100%;
+  height: 12px;
+  border-radius: 100px;
+  outline: none;
+  cursor: pointer;
+  position: relative;
+  z-index: 1;
+  background: transparent;
+}
+.lightness-slider::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  background: #ffffff;
+  border: 2px solid #c8c8cc;
+  box-shadow: 0 1px 4px rgba(0,0,0,0.15);
+  cursor: pointer;
+  transition: border-color 0.15s ease;
+}
+.lightness-slider::-webkit-slider-thumb:hover {
+  border-color: #1a6cff;
+}
+.lightness-slider::-moz-range-thumb {
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  background: #ffffff;
+  border: 2px solid #c8c8cc;
+  box-shadow: 0 1px 4px rgba(0,0,0,0.15);
+  cursor: pointer;
+}
+.lightness-slider::-moz-range-track {
+  background: transparent;
+  border: none;
+  height: 12px;
+}
+.lightness-value {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 11px;
+  font-weight: 500;
+  color: rgba(10,10,20,0.5);
+  flex-shrink: 0;
+  width: 32px;
+  text-align: right;
+}
+
+/* ─── SWAP BUTTON ─── */
+.swap-inline {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin: 0 -14px;
+  z-index: 3;
+  position: relative;
+}
+.swap-btn {
+  width: 40px; height: 40px;
+  border-radius: 50%;
+  background: rgba(255,255,255,0.85);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  border: 1px solid rgba(255,255,255,0.9);
+  box-shadow: 0 2px 12px rgba(0,0,0,0.06);
+  
+  display: flex; align-items: center; justify-content: center;
+  color: rgba(10,10,20,0.45);
+  transition: all 0.25s cubic-bezier(0.16,1,0.3,1);
+  flex-shrink: 0;
+}
+.swap-btn:hover {
+  background: #1a6cff;
+  color: white;
+  border-color: #1a6cff;
+  transform: rotate(180deg);
+  box-shadow: 0 4px 16px rgba(26,108,255,0.25);
+}
+.swap-btn svg { width: 18px; height: 18px; }
+
+/* ─── RESULT CARD ─── */
+.result-card {
+  background: #ffffff;
+  backdrop-filter: blur(24px);
+  -webkit-backdrop-filter: blur(24px);
+  border: 1px solid rgba(255,255,255,0.9);
+  border-radius: 24px;
+  padding: 24px;
+  box-shadow: 0 4px 24px rgba(0,0,0,0.04);
+  margin-bottom: 16px;
+  animation: fadeUp 0.8s 0.4s cubic-bezier(0.16,1,0.3,1) both;
+  position: relative;
+  z-index: 0;
+}
+
+.ratio-section { text-align: center; margin-bottom: 16px; }
+.ratio-label {
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: rgba(10,10,20,0.45);
+  margin-bottom: 4px;
+}
+.ratio-value {
+  font-family: 'Cormorant Garamond', serif;
+  font-size: clamp(40px, 6vw, 56px);
+  font-weight: 300;
+  letter-spacing: -0.04em;
+  color: #1a6cff;
+  line-height: 1;
+}
+.ratio-suffix {
+  font-size: 0.4em;
+  color: rgba(10,10,20,0.45);
+  font-weight: 400;
+  letter-spacing: -0.02em;
+}
+
+/* ─── WCAG GRID ─── */
+.wcag-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 8px;
+  margin-bottom: 0;
+}
+.wcag-item {
+  background: #ffffff;
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  border: 1px solid rgba(255,255,255,0.85);
+  border-radius: 12px;
+  padding: 10px 12px;
+  text-align: left;
+  transition: all 0.25s ease;
+  box-shadow: 0 2px 12px rgba(26,108,255,0.04), inset 0 1px 0 rgba(255,255,255,0.8);
+  position: relative;
+}
+.wcag-item.pass {
+  background: var(--pass-bg);
+  border-color: var(--pass-border);
+  box-shadow: 0 2px 12px rgba(16,185,129,0.06);
+}
+.wcag-item.fail {
+  background: var(--fail-bg);
+  border-color: var(--fail-border);
+  box-shadow: 0 2px 12px rgba(239,68,68,0.06);
+}
+.wcag-item-header {
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: rgba(10,10,20,0.45);
+  margin-bottom: 4px;
+}
+.wcag-item-level {
+  font-family: 'DM Sans', sans-serif;
+  font-size: 13px;
+  font-weight: 600;
+  color: #0a0a14;
+  margin-bottom: 0;
+}
+.wcag-badge {
+  position: absolute;
+  top: 8px;
+  right: 10px;
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  padding: 2px 8px;
+  border-radius: 100px;
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+}
+.wcag-badge svg { width: 9px; height: 9px; }
+.wcag-badge.pass {
+  background: rgba(16,185,129,0.15);
+  color: #059669;
+}
+.wcag-badge.fail {
+  background: rgba(239,68,68,0.15);
+  color: #dc2626;
+}
+.wcag-item-desc {
+  display: none;
+}
+.wcag-item.pass .wcag-item-desc { color: #059669; opacity: 0.7; }
+.wcag-item.fail .wcag-item-desc { color: #dc2626; opacity: 0.7; }
+
+/* ─── DETAILS GRID ─── */
+.details-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 16px;
+  margin-bottom: 24px;
+  animation: fadeUp 0.8s 0.5s cubic-bezier(0.16,1,0.3,1) both;
+}
+.detail-card {
+  background: #ffffff;
+  backdrop-filter: blur(24px);
+  -webkit-backdrop-filter: blur(24px);
+  border: 1px solid rgba(255,255,255,0.9);
+  border-radius: 24px;
+  padding: 24px;
+  box-shadow: 0 4px 24px rgba(0,0,0,0.04);
+}
+.detail-card-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 16px;
+  padding-bottom: 12px;
+  border-bottom: 1px solid rgba(10,10,20,0.06);
+}
+.detail-card-title {
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: #0a0a14;
+}
+.detail-mini-swatch {
+  width: 20px; height: 20px;
+  border-radius: 6px;
+  border: 1px solid rgba(0,0,0,0.08);
+}
+.detail-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 10px 12px;
+  background: #f5f5f7;
+  border: 1px solid #e5e5ea;
+  border-radius: 12px;
+  margin-bottom: 6px;
+}
+.detail-row-label {
+  font-size: 11px;
+  font-weight: 500;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: rgba(10,10,20,0.45);
+}
+.detail-row-value {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 13px;
+  font-weight: 500;
+  
+  transition: opacity 0.2s;
+  letter-spacing: -0.2px;
+}
+.detail-row-value:hover { opacity: 0.7; }
+
+/* ─── SAVED COMBINATIONS ─── */
+.saved-section {
+  max-width: 960px;
+  margin: 0 auto 16px;
+  padding: 24px;
+  animation: fadeUp 0.8s 0.5s cubic-bezier(0.16,1,0.3,1) both;
+  background: #ffffff;
+  border: 1px solid rgba(255,255,255,0.9);
+  border-radius: 24px;
+  box-shadow: 0 4px 24px rgba(0,0,0,0.04);
+}
+.saved-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 12px;
+}
+.saved-title {
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: rgba(10,10,20,0.45);
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.saved-count {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 11px;
+  color: rgba(10,10,20,0.35);
+}
+.saved-grid {
+  display: flex;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+.save-combo-btn {
+  width: 120px;
+  height: 72px;
+  border-radius: 16px;
+  background: #ffffff;
+  border: 2px dashed #d1d1d6;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+  cursor: pointer;
+  color: rgba(10,10,20,0.35);
+  font-family: 'DM Sans', sans-serif;
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.03em;
+  transition: all 0.2s ease;
+}
+.save-combo-btn svg { width: 18px; height: 18px; }
+.save-combo-btn:hover {
+  border-color: #1a6cff;
+  color: #1a6cff;
+  background: rgba(26,108,255,0.03);
+}
+.save-combo-btn.disabled {
+  opacity: 0.3;
+  pointer-events: none;
+}
+.saved-combo {
+  width: 120px;
+  height: 72px;
+  border-radius: 16px;
+  overflow: hidden;
+  cursor: pointer;
+  position: relative;
+  border: 1px solid #e5e5ea;
+  transition: all 0.2s ease;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-family: 'Cormorant Garamond', serif;
+  font-size: 32px;
+  font-weight: 400;
+  letter-spacing: -0.02em;
+}
+.saved-combo:hover {
+  box-shadow: 0 4px 16px rgba(0,0,0,0.1);
+  transform: translateY(-2px);
+}
+.saved-combo-delete {
+  position: absolute;
+  top: 4px;
+  right: 4px;
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  background: rgba(0,0,0,0.4);
+  border: none;
+  color: white;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  opacity: 0;
+  transition: opacity 0.15s ease;
+  padding: 0;
+}
+.saved-combo-delete svg { width: 10px; height: 10px; }
+.saved-combo:hover .saved-combo-delete { opacity: 1; }
+
+/* ─── FOOTER ─── */
+.footer {
+  text-align: center;
+  padding: 24px;
+  font-size: 12px;
+  color: var(--fg-dynamic);
+  opacity: 0.4;
+  animation: fadeUp 0.8s 0.6s cubic-bezier(0.16,1,0.3,1) both;
+  transition: color 0.3s ease;
+}
+.footer a {
+  color: var(--fg-dynamic);
+  text-decoration: none;
+  font-weight: 500;
+  opacity: 0.8;
+}
+.footer a:hover { text-decoration: underline; }
+
+/* ─── TOAST ─── */
+.toast {
+  position: fixed;
+  bottom: 32px;
+  left: 50%;
+  transform: translateX(-50%) translateY(80px);
+  background: #0a0a14;
+  color: #ffffff;
+  padding: 12px 22px;
+  border-radius: 100px;
+  font-size: 13px;
+  font-weight: 500;
+  z-index: 9999;
+  transition: transform 0.4s cubic-bezier(0.16,1,0.3,1), opacity 0.4s;
+  opacity: 0;
+  pointer-events: none;
+  white-space: nowrap;
+}
+.toast.show { transform: translateX(-50%) translateY(0); opacity: 1; }
+
+/* ─── KEYFRAMES ─── */
+@keyframes fadeUp { from { opacity:0; transform: translateY(24px); } to { opacity:1; transform: translateY(0); } }
+@keyframes fadeDown { from { opacity:0; transform: translateY(-12px); } to { opacity:1; transform: translateY(0); } }
+@keyframes slideIn { from { opacity:0; transform: translateY(20px); } to { opacity:1; transform: translateY(0); } }
+@keyframes pulse { 0%,100%{opacity:1;transform:scale(1)} 50%{opacity:0.4;transform:scale(1.3)} }
+
+/* ─── RESPONSIVE ─── */
+@media (max-width: 640px) {
+  main { padding: 32px 16px 60px; }
+  .main-grid { grid-template-columns: 1fr; }
+  .swap-inline { margin: -10px 0; z-index: 3; }
+  .swap-btn svg { transform: rotate(90deg); }
+  .swap-btn:hover svg { transform: rotate(270deg); }
+  .wcag-grid { grid-template-columns: repeat(2, 1fr); }
+  .details-grid { grid-template-columns: 1fr; }
+  .result-card { padding: 20px 16px; }
+  .color-card { padding: 20px 20px 24px; }
+}
+</style>
+</head>
+<body>
+
+<canvas id="meshCanvas"></canvas>
+
+<div class="app">
+  <nav>
+    <div class="nav-logo">
+      <div class="nav-logo-dot"></div>
+      Contrast Checker
+    </div>
+  </nav>
+<main>
+  <!-- Header -->
+  <div class="page-header">
+    <h1>Contrast<br><em>Checker</em></h1>
+    <p>Check WCAG color contrast ratios with real-time naming and accessibility compliance.</p>
+  </div>
+
+  <!-- Color Pickers -->
+  <div class="main-grid">
+    <!-- Foreground -->
+    <div class="color-card">
+      <div class="color-card-label">
+        <span>
+          <svg viewBox="0 0 18 18" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M2 6h14M2 12h14"/><circle cx="5" cy="6" r="1.5" fill="currentColor" stroke="none"/><circle cx="13" cy="12" r="1.5" fill="currentColor" stroke="none"/></svg>
+        </span>
+        Foreground
+      </div>
+      <div class="color-preview-row">
+        <div class="color-swatch-wrapper" id="fgSwatchWrapper">
+          <div class="color-swatch-display" id="fgSwatchDisplay" style="background:#0000FF" data-target="fg"></div>
+          <div class="custom-picker" id="fgCustomPicker" data-target="fg">
+            <div class="picker-sv-area" id="fgSvArea"><canvas id="fgSvCanvas"></canvas><div class="picker-sv-cursor" id="fgSvCursor"></div></div>
+            <div class="picker-hue-strip" id="fgHueStrip"><div class="picker-hue-thumb" id="fgHueThumb"></div></div>
+          </div>
+          <div class="color-info" id="fgInfo">
+            <div class="color-name loading" id="fgName">Loading…</div>
+          </div>
+        </div>
+      </div>
+      <div class="hex-input-row">
+        <div class="hex-input-wrapper">
+          <span class="hex-prefix">#</span>
+          <input type="text" class="hex-input" id="fgHex" value="0000FF" maxlength="6" spellcheck="false">
+        </div>
+        <button class="random-btn" id="fgRandom" title="Random color">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 16V8a2 2 0 00-1-1.73l-7-4a2 2 0 00-2 0l-7 4A2 2 0 003 8v8a2 2 0 001 1.73l7 4a2 2 0 002 0l7-4A2 2 0 0021 16z"/><path d="M7.5 4.21l4.5 2.6 4.5-2.6M7.5 19.79V14.6L3 12M21 12l-4.5 2.6v5.19"/></svg>
+        </button>
+      </div>
+      <div class="lightness-slider-row">
+        <span class="lightness-slider-label"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="5"/><line x1="12" y1="1" x2="12" y2="3"/><line x1="12" y1="21" x2="12" y2="23"/><line x1="4.22" y1="4.22" x2="5.64" y2="5.64"/><line x1="18.36" y1="18.36" x2="19.78" y2="19.78"/><line x1="1" y1="12" x2="3" y2="12"/><line x1="21" y1="12" x2="23" y2="12"/><line x1="4.22" y1="19.78" x2="5.64" y2="18.36"/><line x1="18.36" y1="5.64" x2="19.78" y2="4.22"/></svg></span>
+        <div class="lightness-slider-wrap">
+          <div class="lightness-slider-track" id="fgLightnessTrack"></div>
+          <input type="range" class="lightness-slider" id="fgLightness" min="0" max="100" value="50">
+        </div>
+        <span class="lightness-value" id="fgLightnessVal">50%</span>
+      </div>
+    </div>
+
+    <!-- Swap -->
+    <div class="swap-inline">
+      <button class="swap-btn" id="swapBtn" title="Swap colors">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M16 3l4 4-4 4M20 7H4M8 21l-4-4 4-4M4 17h16"/></svg>
+      </button>
+    </div>
+
+    <!-- Background -->
+    <div class="color-card">
+      <div class="color-card-label">
+        <span>
+          <svg viewBox="0 0 18 18" fill="none" stroke="currentColor" stroke-width="1.5"><rect x="2" y="2" width="14" height="14" rx="3"/><rect x="5" y="5" width="8" height="8" rx="1.5" fill="currentColor" stroke="none" opacity="0.3"/></svg>
+        </span>
+        Background
+      </div>
+      <div class="color-preview-row">
+        <div class="color-swatch-wrapper" id="bgSwatchWrapper">
+          <div class="color-swatch-display" id="bgSwatchDisplay" style="background:#FFFFFF" data-target="bg"></div>
+          <div class="custom-picker" id="bgCustomPicker" data-target="bg">
+            <div class="picker-sv-area" id="bgSvArea"><canvas id="bgSvCanvas"></canvas><div class="picker-sv-cursor" id="bgSvCursor"></div></div>
+            <div class="picker-hue-strip" id="bgHueStrip"><div class="picker-hue-thumb" id="bgHueThumb"></div></div>
+          </div>
+          <div class="color-info" id="bgInfo">
+            <div class="color-name loading" id="bgName">Loading…</div>
+          </div>
+        </div>
+      </div>
+      <div class="hex-input-row">
+        <div class="hex-input-wrapper">
+          <span class="hex-prefix">#</span>
+          <input type="text" class="hex-input" id="bgHex" value="FFFFFF" maxlength="6" spellcheck="false">
+        </div>
+        <button class="random-btn" id="bgRandom" title="Random color">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 16V8a2 2 0 00-1-1.73l-7-4a2 2 0 00-2 0l-7 4A2 2 0 003 8v8a2 2 0 001 1.73l7 4a2 2 0 002 0l7-4A2 2 0 0021 16z"/><path d="M7.5 4.21l4.5 2.6 4.5-2.6M7.5 19.79V14.6L3 12M21 12l-4.5 2.6v5.19"/></svg>
+        </button>
+      </div>
+      <div class="lightness-slider-row">
+        <span class="lightness-slider-label"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="5"/><line x1="12" y1="1" x2="12" y2="3"/><line x1="12" y1="21" x2="12" y2="23"/><line x1="4.22" y1="4.22" x2="5.64" y2="5.64"/><line x1="18.36" y1="18.36" x2="19.78" y2="19.78"/><line x1="1" y1="12" x2="3" y2="12"/><line x1="21" y1="12" x2="23" y2="12"/><line x1="4.22" y1="19.78" x2="5.64" y2="18.36"/><line x1="18.36" y1="5.64" x2="19.78" y2="4.22"/></svg></span>
+        <div class="lightness-slider-wrap">
+          <div class="lightness-slider-track" id="bgLightnessTrack"></div>
+          <input type="range" class="lightness-slider" id="bgLightness" min="0" max="100" value="100">
+        </div>
+        <span class="lightness-value" id="bgLightnessVal">100%</span>
+      </div>
+    </div>
+  </div>
+
+  <!-- Results -->
+  <div class="result-card">
+    <div class="ratio-section">
+      <div class="ratio-label">Contrast Ratio</div>
+      <div class="ratio-value" id="ratioValue">8.59<span class="ratio-suffix"> : 1</span></div>
+    </div>
+
+    <!-- WCAG Grid -->
+    <div class="wcag-grid">
+      <div class="wcag-item" id="wcagNormalAA">
+        <div class="wcag-item-header">Normal Text</div>
+        <div class="wcag-item-level">AA · ≥ 4.5:1</div>
+        <span class="wcag-badge pass">
+          <svg viewBox="0 0 12 12" fill="none" stroke="currentColor" stroke-width="2"><path d="M2 6l3 3 5-5"/></svg>
+          Pass
+        </span>
+        <div class="wcag-item-desc">Body copy under 18px or 14px bold</div>
+      </div>
+      <div class="wcag-item" id="wcagNormalAAA">
+        <div class="wcag-item-header">Normal Text</div>
+        <div class="wcag-item-level">AAA · ≥ 7:1</div>
+        <span class="wcag-badge pass">
+          <svg viewBox="0 0 12 12" fill="none" stroke="currentColor" stroke-width="2"><path d="M2 6l3 3 5-5"/></svg>
+          Pass
+        </span>
+        <div class="wcag-item-desc">Enhanced — best for long-form reading</div>
+      </div>
+      <div class="wcag-item" id="wcagLargeAA">
+        <div class="wcag-item-header">Large Text</div>
+        <div class="wcag-item-level">AA · ≥ 3:1</div>
+        <span class="wcag-badge pass">
+          <svg viewBox="0 0 12 12" fill="none" stroke="currentColor" stroke-width="2"><path d="M2 6l3 3 5-5"/></svg>
+          Pass
+        </span>
+        <div class="wcag-item-desc">Headlines 18px+ or 14px+ bold</div>
+      </div>
+      <div class="wcag-item" id="wcagLargeAAA">
+        <div class="wcag-item-header">Large Text</div>
+        <div class="wcag-item-level">AAA · ≥ 4.5:1</div>
+        <span class="wcag-badge pass">
+          <svg viewBox="0 0 12 12" fill="none" stroke="currentColor" stroke-width="2"><path d="M2 6l3 3 5-5"/></svg>
+          Pass
+        </span>
+        <div class="wcag-item-desc">Enhanced — highest readability for headings</div>
+      </div>
+      <div class="wcag-item" id="wcagGraphics">
+        <div class="wcag-item-header">UI Components</div>
+        <div class="wcag-item-level">AA · ≥ 3:1</div>
+        <span class="wcag-badge pass">
+          <svg viewBox="0 0 12 12" fill="none" stroke="currentColor" stroke-width="2"><path d="M2 6l3 3 5-5"/></svg>
+          Pass
+        </span>
+        <div class="wcag-item-desc">Buttons, inputs, form borders, focus rings</div>
+      </div>
+      <div class="wcag-item" id="wcagNonText">
+        <div class="wcag-item-header">Non-Text</div>
+        <div class="wcag-item-level">AA · ≥ 3:1</div>
+        <span class="wcag-badge pass">
+          <svg viewBox="0 0 12 12" fill="none" stroke="currentColor" stroke-width="2"><path d="M2 6l3 3 5-5"/></svg>
+          Pass
+        </span>
+        <div class="wcag-item-desc">Icons, charts, meaningful graphics</div>
+      </div>
+    </div>
+
+  </div>
+
+  <!-- Color Details -->
+  <div class="details-grid">
+    <div class="detail-card" id="fgDetails">
+      <div class="detail-card-header">
+        <span class="detail-card-title">Foreground Details</span>
+        <div class="detail-mini-swatch" id="fgMiniSwatch"></div>
+      </div>
+      <div id="fgDetailRows"></div>
+    </div>
+    <div class="detail-card" id="bgDetails">
+      <div class="detail-card-header">
+        <span class="detail-card-title">Background Details</span>
+        <div class="detail-mini-swatch" id="bgMiniSwatch"></div>
+      </div>
+      <div id="bgDetailRows"></div>
+    </div>
+  </div>
+
+  <!-- Saved Combinations -->
+  <div class="saved-section" id="savedSection">
+    <div class="saved-header">
+      <span class="saved-title">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width:14px;height:14px"><path d="M19 21H5a2 2 0 01-2-2V5a2 2 0 012-2h11l5 5v11a2 2 0 01-2 2z"/><polyline points="17 21 17 13 7 13 7 21"/><polyline points="7 3 7 8 15 8"/></svg>
+        Saved Combinations
+      </span>
+      <span class="saved-count" id="savedCount">0 / 10</span>
+    </div>
+    <div class="saved-grid" id="savedGrid">
+      <button class="save-combo-btn" id="saveComboBtn" title="Save current combination">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+        <span>Save</span>
+      </button>
+    </div>
+  </div>
+
+  <div class="footer">
+    Color names via <a href="https://github.com/meodai/color-names" target="_blank">Color Names</a> · WCAG 2.1 Contrast Algorithm<br>
+    Built with care for accessibility
+  </div>
+</main>
+</div>
+
+<div class="toast" id="toast">Copied!</div>
+
+<script>
+  // ─── MESH ───
+  const canvas = document.getElementById('meshCanvas');
+  const ctx = canvas.getContext('2d');
+
+  function resizeCanvas() {
+    canvas.width = window.innerWidth;
+    canvas.height = window.innerHeight;
+  }
+  resizeCanvas();
+  window.addEventListener('resize', resizeCanvas);
+
+  const blobs = [
+    { x: 0.15, y: 0.2, r: 0.48, s: 0.00028 },
+    { x: 0.85, y: 0.15, r: 0.42, s: 0.00036 },
+    { x: 0.5, y: 0.75, r: 0.52, s: 0.00022 },
+    { x: 0.92, y: 0.8, r: 0.38, s: 0.0003 },
+  ];
+
+  function hexToRgbValues(hex) {
+    const h = hex.replace('#','');
+    return { r: parseInt(h.slice(0,2),16), g: parseInt(h.slice(2,4),16), b: parseInt(h.slice(4,6),16) };
+  }
+  function blendColor(fg, bg, amt) {
+    return {
+      r: Math.round(bg.r + (fg.r - bg.r) * amt),
+      g: Math.round(bg.g + (fg.g - bg.g) * amt),
+      b: Math.round(bg.b + (fg.b - bg.b) * amt),
+    };
+  }
+
+  let meshBg = '#FFFFFF';
+  let meshFg = '#0000FF';
+
+  let t = 0;
+  function drawMesh() {
+    t++;
+    const W = canvas.width, H = canvas.height;
+    ctx.clearRect(0, 0, W, H);
+    ctx.fillStyle = meshBg;
+    ctx.fillRect(0, 0, W, H);
+
+    const fgRgb = hexToRgbValues(meshFg);
+    const bgRgb = hexToRgbValues(meshBg);
+    const blobAmounts = [0.08, 0.06, 0.05, 0.07];
+
+    blobs.forEach((b, i) => {
+      const x = (b.x + Math.sin(t * b.s + i * 1.3) * 0.14) * W;
+      const y = (b.y + Math.cos(t * b.s * 1.2 + i) * 0.12) * H;
+      const r = b.r * Math.min(W, H);
+      const blended = blendColor(fgRgb, bgRgb, blobAmounts[i]);
+      const c = `rgb(${blended.r},${blended.g},${blended.b})`;
+      const g = ctx.createRadialGradient(x, y, 0, x, y, r);
+      g.addColorStop(0, c);
+      const bgR = bgRgb.r, bgG = bgRgb.g, bgB = bgRgb.b;
+      g.addColorStop(1, `rgba(${bgR},${bgG},${bgB},0)`);
+      ctx.beginPath(); ctx.arc(x, y, r, 0, Math.PI * 2);
+      ctx.fillStyle = g; ctx.fill();
+    });
+    requestAnimationFrame(drawMesh);
+  }
+  drawMesh();
+
+  // ─── ELEMENTS ───
+  const fgHexInput = document.getElementById('fgHex');
+  const bgHexInput = document.getElementById('bgHex');
+  const fgNameEl = document.getElementById('fgName');
+  const bgNameEl = document.getElementById('bgName');
+  const ratioValueEl = document.getElementById('ratioValue');
+  const toastEl = document.getElementById('toast');
+
+  let fgColor = '#0000FF';
+  let bgColor = '#FFFFFF';
+
+  // ─── CUSTOM PICKER ENGINE ───
+  const pickers = {};
+
+  function hexToHsv(hex) {
+    let r = parseInt(hex.slice(1,3),16)/255, g = parseInt(hex.slice(3,5),16)/255, b = parseInt(hex.slice(5,7),16)/255;
+    let max = Math.max(r,g,b), min = Math.min(r,g,b), d = max - min;
+    let h = 0, s = max === 0 ? 0 : d/max, v = max;
+    if (d !== 0) {
+      if (max === r) h = ((g-b)/d + (g<b?6:0))/6;
+      else if (max === g) h = ((b-r)/d + 2)/6;
+      else h = ((r-g)/d + 4)/6;
+    }
+    return { h, s, v };
+  }
+  function hsvToHex(h, s, v) {
+    let i = Math.floor(h*6), f = h*6 - i, p = v*(1-s), q = v*(1-f*s), t = v*(1-(1-f)*s);
+    let r, g, b;
+    switch(i%6) {
+      case 0: r=v;g=t;b=p; break; case 1: r=q;g=v;b=p; break;
+      case 2: r=p;g=v;b=t; break; case 3: r=p;g=q;b=v; break;
+      case 4: r=t;g=p;b=v; break; case 5: r=v;g=p;b=q; break;
+    }
+    return '#' + [r,g,b].map(c => Math.round(c*255).toString(16).padStart(2,'0')).join('');
+  }
+
+  function initPicker(target) {
+    const p = {
+      target,
+      svCanvas: document.getElementById(target+'SvCanvas'),
+      svArea: document.getElementById(target+'SvArea'),
+      svCursor: document.getElementById(target+'SvCursor'),
+      hueStrip: document.getElementById(target+'HueStrip'),
+      hueThumb: document.getElementById(target+'HueThumb'),
+      picker: document.getElementById(target+'CustomPicker'),
+      display: document.getElementById(target+'SwatchDisplay'),
+      h: 0, s: 1, v: 1,
+      draggingSv: false, draggingHue: false
+    };
+    const hsv = hexToHsv(target === 'fg' ? fgColor : bgColor);
+    p.h = hsv.h; p.s = hsv.s; p.v = hsv.v;
+    pickers[target] = p;
+
+    // Draw SV canvas
+    function drawSv() {
+      const canvas = p.svCanvas;
+      const rect = p.svArea.getBoundingClientRect();
+      canvas.width = rect.width; canvas.height = rect.height;
+      const ctx = canvas.getContext('2d');
+      const w = canvas.width, h = canvas.height;
+
+      // Hue base
+      ctx.fillStyle = `hsl(${p.h*360},100%,50%)`;
+      ctx.fillRect(0,0,w,h);
+
+      // White gradient left to right
+      let gw = ctx.createLinearGradient(0,0,w,0);
+      gw.addColorStop(0,'rgba(255,255,255,1)');
+      gw.addColorStop(1,'rgba(255,255,255,0)');
+      ctx.fillStyle = gw; ctx.fillRect(0,0,w,h);
+
+      // Black gradient top to bottom
+      let gb = ctx.createLinearGradient(0,0,0,h);
+      gb.addColorStop(0,'rgba(0,0,0,0)');
+      gb.addColorStop(1,'rgba(0,0,0,1)');
+      ctx.fillStyle = gb; ctx.fillRect(0,0,w,h);
+    }
+
+    function updateCursors() {
+      const rect = p.svArea.getBoundingClientRect();
+      p.svCursor.style.left = (p.s * rect.width) + 'px';
+      p.svCursor.style.top = ((1 - p.v) * rect.height) + 'px';
+      p.svCursor.style.background = hsvToHex(p.h, p.s, p.v);
+      p.hueThumb.style.left = (p.h * 100) + '%';
+      p.hueThumb.style.background = `hsl(${p.h*360},100%,50%)`;
+    }
+
+    function applyColor() {
+      const hex = hsvToHex(p.h, p.s, p.v);
+      if (target === 'fg') { fgColor = hex; fgHexInput.value = hex.replace('#','').toUpperCase(); }
+      else { bgColor = hex; bgHexInput.value = hex.replace('#','').toUpperCase(); }
+      update();
+    }
+
+    // SV drag
+    function onSvMove(e) {
+      e.preventDefault();
+      const rect = p.svArea.getBoundingClientRect();
+      const cx = (e.touches ? e.touches[0].clientX : e.clientX) - rect.left;
+      const cy = (e.touches ? e.touches[0].clientY : e.clientY) - rect.top;
+      p.s = Math.max(0, Math.min(1, cx / rect.width));
+      p.v = Math.max(0, Math.min(1, 1 - cy / rect.height));
+      updateCursors();
+      applyColor();
+    }
+    p.svArea.addEventListener('mousedown', e => { p.draggingSv = true; onSvMove(e); });
+    p.svArea.addEventListener('touchstart', e => { p.draggingSv = true; onSvMove(e); }, {passive:false});
+    document.addEventListener('mousemove', e => { if (p.draggingSv) onSvMove(e); });
+    document.addEventListener('touchmove', e => { if (p.draggingSv) onSvMove(e); }, {passive:false});
+    document.addEventListener('mouseup', () => p.draggingSv = false);
+    document.addEventListener('touchend', () => p.draggingSv = false);
+
+    // Hue drag
+    function onHueMove(e) {
+      e.preventDefault();
+      const rect = p.hueStrip.getBoundingClientRect();
+      const cx = (e.touches ? e.touches[0].clientX : e.clientX) - rect.left;
+      p.h = Math.max(0, Math.min(1, cx / rect.width));
+      drawSv();
+      updateCursors();
+      applyColor();
+    }
+    p.hueStrip.addEventListener('mousedown', e => { p.draggingHue = true; onHueMove(e); });
+    p.hueStrip.addEventListener('touchstart', e => { p.draggingHue = true; onHueMove(e); }, {passive:false});
+    document.addEventListener('mousemove', e => { if (p.draggingHue) onHueMove(e); });
+    document.addEventListener('touchmove', e => { if (p.draggingHue) onHueMove(e); }, {passive:false});
+    document.addEventListener('mouseup', () => p.draggingHue = false);
+    document.addEventListener('touchend', () => p.draggingHue = false);
+
+    // Toggle
+    p.display.addEventListener('click', () => {
+      // Close other picker
+      const other = target === 'fg' ? 'bg' : 'fg';
+      if (pickers[other]) pickers[other].picker.classList.remove('open');
+      p.picker.classList.toggle('open');
+      if (p.picker.classList.contains('open')) {
+        drawSv();
+        updateCursors();
+      }
+    });
+
+    p.drawSv = drawSv;
+    p.updateCursors = updateCursors;
+    drawSv();
+    updateCursors();
+  }
+
+  // Close pickers on outside click
+  document.addEventListener('click', e => {
+    ['fg','bg'].forEach(t => {
+      if (!pickers[t]) return;
+      const wrapper = document.getElementById(t+'SwatchWrapper');
+      if (!wrapper.contains(e.target)) pickers[t].picker.classList.remove('open');
+    });
+  });
+
+  // Sync picker state from hex
+  function syncPickerFromHex(target, hex) {
+    if (!pickers[target]) return;
+    const p = pickers[target];
+    const hsv = hexToHsv(hex);
+    p.h = hsv.h; p.s = hsv.s; p.v = hsv.v;
+    if (p.picker.classList.contains('open')) {
+      p.drawSv();
+      p.updateCursors();
+    }
+  }
+
+  const COLOR_DATA = [["100 Mph","c93f38"],["A Brand New Day","ffaabb"],["Aare River","00b89f"],["Abel","f5ecda"],["Absolute Zero","0048ba"],["Acacia Tree","a69d64"],["Acapulco Sun","eb8a44"],["Acid Pops","33ee66"],["Actinic Light","ff44ee"],["Adirondack Blue","74858f"],["Adolescent Rodent","a99681"],["Adventure Island Pink","f87858"],["Aerial View","a0b2c8"],["African Bubinga","c7927a"],["After the Storm","33616a"],["Agave Frond","5a6e6a"],["Aged Mustard Green","6e6e30"],["Ageless","ececdf"],["Ai Indigo","274447"],["Airway","aec1d4"],["Akira Red","e12120"],["Alaskan Blue","61a4ce"],["Alexandria","ff8f73"],["Algodon Azul","c1dbec"],["Align","00728d"],["Alligator","886600"],["Alluring Umber","977b4d"],["Almond Frost","9a8678"],["Almondine","fedebc"],["Aloe Nectar","dfe2c9"],["Alpaca Mittens","d7b8a9"],["Alpine Forget-Me-Not","5f6d91"],["Alright Then I Became a Princess","ffaaa5"],["Always Almond","ebe5d2"],["Amaranth Deep Purple","9f2b68"],["Amazon Breeze","ebebd6"],["Amazonite","00c4b0"],["Amber Romance","b18140"],["Ambrosia Ivory","fff4eb"],["American River","626e71"],["Amethyst Light Violet","cfc2d1"],["Amor","ee3377"],["Amygdala Purple","69045f"],["Anchors Away","9ebbcd"],["Ancient Inca","e3af8e"],["Ancient Relic","ccc1ab"],["Andorra","633737"],["Angel Hair Silver","d2d6db"],["Angelic Descent","eecc33"],["Angry Gargoyle","9799a6"],["Aniseed","cda741"],["Antarctic Deep","35383f"],["Antilles Blue","3b5e8d"],["Antique Chest","a7856d"],["Antique Kilim","c5bba8"],["Antique Rose","997165"],["Antler Moth","864f3e"],["Apium","b5d0a2"],["Apple Blossom","ddbca0"],["Apple Hill","a69f8d"],["Apple Sauce","f4ebd2"],["Apricot","ffb16d"],["Apricot Glow","ffce79"],["Apricot Sherbet","fbcd9f"],["April Rain","9bada8"],["Aqua Dream","b7c9b5"],["Aqua Nation","08787f"],["Aqua Verde","56b3c3"],["Aquamentus Green","00a800"],["Aquarius","2db0ce"],["Arabella","82acc4"],["Aragonite Grey","948e96"],["Arcade White","edebe2"],["Arctic Air","cbd8e5"],["Arctic Lime","d0ff14"],["Argent","888888"],["Aristocratic Pink","ddaacc"],["Armour","74857f"],["Aromatic Breeze","ffcecb"],["Arrowroot","f8decf"],["Artemis Silver","ddddee"],["Artifice","e6e2d3"],["Artist’s Charcoal","37393e"],["Asagi Koi","455559"],["Ash Tree","aabb99"],["Ashes","b8b5ad"],["Ask Me Anything","b8b0a5"],["Aspen Snow","f0f0e7"],["Aster Purple","8881b0"],["Astrogranite","757679"],["Ateneo Blue","003a6c"],["Atlantic Foam","a5b4ac"],["Atlas White","ede5cf"],["Attar of Rose","994240"],["Aubergine Green","8b762c"],["Aura","b2a8a1"],["Aurora Red","c13435"],["Autumn","af865b"],["Autumn Fest","be7d33"],["Autumn Leaf","b56a4c"],["Autumn Russet","a4746e"],["Aventurine","576e6a"],["Avorio","ccbdb4"],["Axolotl","fff0df"],["Aztec Brick","9e8352"],["Azul Primavera","e2eff2"],["Azuremyst Isle","cc81f0"],["Baby Blossom","faefe9"],["Baby Melon","ffa468"],["Baby’s Booties","e8c1c2"],["Backcountry","7c725f"],["Badlands Taupe","d5bcb3"],["Bainganī","8273fd"],["Baked Salmon","df9876"],["Balance","d1dbc2"],["Ball Gown","525661"],["Ballpoint Indigo","323477"],["Balsam Pear","b19338"],["Bamboo Brown","c87f00"],["Banana Biscuit","ffde7b"],["Banana Ice Cream","f1d3b2"],["Banana Sparkes","f6f5d7"],["Bangalore","bbaa88"],["Baptism by Fire","e6490b"],["Barberry","ee1133"],["Barely Aqua","bae9e0"],["Barf Green","94ac02"],["Barley Groats","fbf2db"],["Baronial Brown","5a4840"],["Barrister Grey","a2a59e"],["Basil","879f84"],["Basketweave Beige","caad92"],["Bath","d8e9db"],["Battered Sausage","ede2d4"],["Bavarian","4d5e42"],["Bay Salt","d2cdbc"],["Bayshore","89cee0"],["Beach Breeze","91cbbf"],["Beach Trail","fedeca"],["Beagle Brown","8d6737"],["Bear Rug","5a4943"],["Beauport Aubergine","553f44"],["Béchamel","f4eee0"],["Bee Master","735b3b"],["Beekeeper","f6e491"],["Before the Storm","4d6a77"],["Beige Red","de9408"],["Believable Buff","dbc7a8"],["Belle of the Ball","e3cbc0"],["Beluga Song","d7d2d2"],["Benitoite","007baa"],["Bermuda Grey","6b8ba2"],["Berry Blue Green","264b56"],["Berry Curious","9b1c5d"],["Berry Taffy","ecd5d9"],["Best in Show","b9b7bd"],["Beurre Blanc","ede1be"],["Bianca","f4efe0"],["Big Dip O’ruby","9c2542"],["Big Yellow Taxi","ffff33"],["Billiard Ball","276b40"],["Biltong","410200"],["Biotic Grasp","eeee44"],["Bird’s Nest","cfbb9b"],["Biscay","2f3c53"],["Bisque Tan","e5d2b0"],["Bitter","88896c"],["Bittersweet Shimmer","bf4f51"],["Black Coffee","3e3231"],["Black Garnet","4e4444"],["Black Knight","010b13"],["Black Onyx","2a272c"],["Black Rose","532934"],["Black Stallion","0e191c"],["Blackberry","43182f"],["Blackberry Wine","5c3c55"],["Blackish Grey","5b5c61"],["Bladerunner","6a8561"],["Blanka Green","9cd33c"],["Blazing Orange","ffa64f"],["Bleached Linen","f3ece1"],["Blended Fruit","f8e3a4"],["Blissful","ddc4d4"],["Blizzy Blueberry","1151b4"],["Blood Donor","ea1822"],["Bloodletter","e97451"],["Bloody Red","ca1f1b"],["Blossom Time","e5d2c9"],["Blue Angora","a7cfcb"],["Blue Bayou","bec4d3"],["Blue Bobbin","52b4ca"],["Blue Catch","41788a"],["Blue Cola","0088dc"],["Blue Dart Frog","3a7a9b"],["Blue Elemental","5588ee"],["Blue Fin","577fae"],["Blue Glass","b8dcdc"],["Blue Haze","bdbace"],["Blue Hyacinth","8394c5"],["Blue Jinn’s","002d72"],["Blue Lullaby","c8d7d2"],["Blue Mirage","5c6d7c"],["Blue Oasis","296d93"],["Blue Persia","5b92ac"],["Blue Radiance","58cfd4"],["Blue Rodeo","377d95"],["Blue Shadow","758ca4"],["Blue Sou’wester","404956"],["Blue Tea","849da2"],["Blue Tulle","c9dbe5"],["Blue Zephyr","5b6676"],["Blueberry Ice","c6d8e4"],["Bluebottle","8ecfe8"],["Bluey","375978"],["Blush Bomb","dd99aa"],["Blushing Bride","eedad1"],["Bnei Brak Bay","1d5bd6"],["Bodacious","b2619d"],["Boho Copper","b96033"],["Bolero","88464a"],["Bondi Blue","0095b6"],["Bonker Pink","f54d79"],["Booger Buster","00ff77"],["Borderline","c69b58"],["Bosphorus","008468"],["Botanical Night","12403c"],["Bougainvillaea","9884b9"],["Bournonite Green","637a72"],["Boy Blue","8cacd6"],["Brain Freeze","00eeff"],["Brandied Melon","cc7753"],["Brass Knuckle","b9a70f"],["Brave New Teal","015b6d"],["Bread Crumb","e4d4be"],["Breakwater","d1dee4"],["Breeze in June","c4dfe8"],["Brewed Mustard","e68364"],["Brick-A-Brack","a75c3d"],["Bridgeport","004683"],["Bright Bluebonnet","90b3c2"],["Bright Forest","728a51"],["Bright Lime Green","65fe08"],["Bright Parrot","549c38"],["Bright Ube","d19fe8"],["Brilliant Carmine","ad548f"],["Brindle","82776b"],["British Grey Mauve","7d7081"],["Brocade","8c87c5"],["Bronze Cup","eb9552"],["Bronzed Orange","d78a6c"],["Brown Beauty","4a3832"],["Brown Eyes","9e6b4a"],["Brown Pod","3c241b"],["Brown Tumbleweed","37290e"],["Brownish Purple Red","8d746f"],["Bruno Brown","433430"],["Brussels Sprout Green","665e0d"],["Bubblegum Bright","ff01b7"],["Buckingham Gardens","89a068"],["Budapest Pastel","e5e1e6"],["Buff Leather","aa7733"],["Bugle Call","d3973c"],["Bumangués Blue","0777bc"],["Bunni Brown","6c4522"],["Burgundy","900020"],["Burlywood","deb887"],["Burning Steppes","742100"],["Burnished Metal","c8cbc8"],["Burnt Crust","885533"],["Burnt Toffee","ab7e5e"],["Buster","3e4b69"],["Butter Icing","f5e5da"],["Buttercup Glow","f1f458"],["Butternut","ffa177"],["Buttery","ffc283"],["Bygone","918e8a"],["Cabana Bay","8ec1c0"],["Cabin in the Woods","5d4d47"],["Cactus Hill","b1a386"],["Cadmium Orange","ed872d"],["Café Miel","b98f6f"],["Cake Dough","fce0a8"],["Calcite Grey Green","52605f"],["California Chamois","e6b76c"],["Calla Green","747d3b"],["Calm Tint","eae3e9"],["Cambridge Blue","a3c1ad"],["Camel Train","baae9d"],["Cameo Peach","ebcfc9"],["Campanelle Noodle","fcf7db"],["Canadian Pancake","edd8c3"],["Candid Blue","6cc3e0"],["Candlelight Ivory","fcf4e2"],["Candy Grape Fizz","7755ee"],["Cannery Park","bcb09e"],["Canteen","5e5347"],["Canyon Cloud","aeafbb"],["Canyon Wall","a14935"],["Capella","d9ced2"],["Capri","00bfff"],["Captivated","947cae"],["Caramel Candy","b3715d"],["Caramel Mousse","e5caa4"],["Caraquenian Crimson","9c0013"],["Cardamom Green","989057"],["Careys Pink","c99aa0"],["Caribbean Sky","819ecb"],["Carmelito","bb534c"],["Carnation Coral","edb9ad"],["Carolina Parakeet","d8df80"],["Carriage Red","8c403d"],["Carton","bb9e7e"],["Cascade Tour","697f8e"],["Casper","aab5b8"],["Castelvetrano Olive","677727"],["Castlerock","5f5e62"],["Cat’s Purr","0071a0"],["Caterpillar","66a545"],["Catskill White","e0e4dc"],["Cavan","dce2ce"],["Caviar Couture","772244"],["Cedar Ridge","9b6663"],["Celeb City","9d86ad"],["Celery White","dbd9cd"],["Celestial Moon","e3d4b9"],["Celtic Green","1f6954"],["Centennial Rose","b3a7a6"],["Ceramite White","fefee0"],["Cerulean Skies","8cc6cb"],["Chafed Wheat","f6e0cf"],["Chalet","c29867"],["Chamois Yellow","986e19"],["Champagne Orange","ffdfb0"],["Channel Marker Green","04d8b2"],["Chaps","644b41"],["Charismatic","e7c180"],["Charming Green","d4e092"],["Chartreuse","c1f80a"],["Chathams Blue","2c5971"],["Cheerful Hue","ffe195"],["Cheesy Cheetah","eeb033"],["Cherenkov Radiation","22bbff"],["Cherry Blossom","f5c1d5"],["Cherry Ice","dd98a6"],["Cherry Red","f7022a"],["Cherubic","ffe6f1"],["Chestnut Plum","852e19"],["Chic Brick","a4725a"],["Chicken Masala","cc8822"],["Child of the Night","220077"],["Chilli","be4b41"],["Chimayo Red","b16355"],["China Pink","df6ea1"],["Chinese Cherry","f1d7cb"],["Chinese Orange","f37042"],["Chinotto","554747"],["Chive Flower","a193bf"],["Chocolate Bells","775130"],["Chocolate Curl","916d5e"],["Chocolate Melange","331100"],["Chocolate Sparkle","8c6c6f"],["Chopped Dill","b6c2a1"],["Christmas Green","3c8d0d"],["Chrome Chalice","cdc8d2"],["Chrysophobia","4a2200"],["Ciao","de9d7c"],["Cinderella","fbd7cc"],["Cinnamon Crunch","a37d5a"],["Cinnamon Stone","c9543a"],["Cistern","a9b0b6"],["Citrus Blast","e1793a"],["Citrus Surge","8bc34a"],["City Storm","888c8c"],["Clarified Butter","e69c23"],["Classic Cloud","9197a3"],["Classic Silver","b9b9b4"],["Clay Bath","8a7d69"],["Clay Pot","c3663f"],["Clear Calamine","f6e6e4"],["Clear Red","ce261c"],["Clematis Blue","3c3d8a"],["Cliff’s View","ddc5aa"],["Cloisonné","0773af"],["Cloud Number Nine","f9cec6"],["Cloudy Cinnamon","87715f"],["Clove Yellow Brown","523f21"],["Club Soda","e2edeb"],["Coastal Breeze","e0f6fb"],["Coastal Villa","9e9486"],["Cobble Brown","7a6455"],["Cockleshell","e3c6af"],["Cocoa Brown","35281e"],["Cocobolo","784848"],["Coconut Shell","917a56"],["Coffee Brick","6f0c0d"],["Cognac Brown","b98563"],["Cold Foam","efece3"],["Cold Sea Currents","32545e"],["Cold Wind","e1e3e4"],["Colorado Peak","9c9ba7"],["Come Sail Away","5c92c5"],["Common Chalcedony","c8ad7f"],["Composer’s Magic","7a6e7e"],["Concord Jam","695a82"],["Congo","e8c3be"],["Connecticut Lilac","ccbbee"],["Contessa","c16f68"],["Cool Ashes","929291"],["Cool Cream Spirit","b88035"],["Cool Melon","ebd1cd"],["Cool Vapour","d5d7d3"],["Copper","b87333"],["Copper Moon","c29978"],["Copper Wire","db8b67"],["Coral Banks","da8c87"],["Coral Correlation","fead8c"],["Coral Paradise","e76682"],["Coralite","dd675a"],["Coriander","bbb58d"],["Corn","fbec5d"],["Cornflower Blue","6c91c5"],["Coronet Blue","59728e"],["Corvette","e9ba81"],["Cosmic Explorer","551155"],["Costa Del Sol","625d2a"],["Cotswold Dill","dbcdad"],["Cotton Ball","f2f7fd"],["Cotton Flannel","9090a2"],["Couch","4e2a20"],["Country Lake","5d7a85"],["Court Green","b9b7a0"],["Covered Wagon","726449"],["Cowhide","92484a"],["Cracked Pepper","4f5152"],["Craftsman Gold","d3b78b"],["Crantini","954c52"],["Crazy Horse","a57648"],["Cream of Mushroom","ebd1be"],["Creamy","efe8db"],["Creamy Gelato","f0e2c5"],["Creamy Sweet Corn","f7c34c"],["Crème de Caramel","d4b38f"],["Crêpe Papier","dbd7c4"],["Cricket","a6a081"],["Crimson Strawberry","9f2d47"],["Crisp Linen","e7e1d3"],["Crocodile Green","b7ac87"],["Cross Country","a5a080"],["Crown of Ash","a1a9a9"],["Crumbling Cork","a38565"],["Crushed Limestone","d6ddd3"],["Cry Baby Blue","c3d4e7"],["Crystal Coral","fccdc1"],["Crystal Rose","fdc3c6"],["Cuban Plaza","c76d6b"],["Cuddlepot","ad8068"],["Cumulus Cloud","b0c6df"],["Curated White","eae1ce"],["Currant Violet","553e51"],["Customs Green","003839"],["Cyan Cornflower Blue","188bc2"],["Cypress","585d40"],["Dad’s Coupe","2f484e"],["Dainty Debutante","f4bdb3"],["Dakota Trail","d3c29d"],["Damson Plum","dda0dd"],["Dancing Jewel","429b77"],["Danger","ff0e0e"],["Dapple Grey","959486"],["Dark Blond","a68a6e"],["Dark Denim","005588"],["Dark Galaxy","0018a8"],["Dark Lavender","856798"],["Dark Navy","40495b"],["Dark Puce","4f3a3c"],["Dark Sakura","a2646f"],["Dark Sky","909989"],["Dark Teal","014d4e"],["Darkest Forest","223311"],["Dartmouth Green","00703c"],["Dawn of the Fairies","770044"],["Daydreaming","f4f0e1"],["Dead Grass","e4dc8a"],["Death Guard","9eb37b"],["Decadial Pink","decade"],["Deco Grey","89978e"],["Dedication","fee2c8"],["Deep Carmine","744456"],["Deep Dairei Red","7c2229"],["Deep Forest Brown","393437"],["Deep Lavender","565a7d"],["Deep Orange","dc4d01"],["Deep River","0079b3"],["Deep Sea Green","095859"],["Deep Space Echo","292e35"],["Deep Violet","330066"],["Deepsea Kraken","082599"],["Delaunay Green","aab350"],["Delicate Blush","efd7d1"],["Delicate Mist","e1ebe5"],["Delicious","585e46"],["Delltone","8ec39e"],["Demitasse","493c31"],["Denim Light","b8cad5"],["Descent Into the Catacombs","445155"],["Desert Dusk","ad9a91"],["Desert Mesa","efcfbc"],["Desert Rose","cd616b"],["Desert Temple","ddcc99"],["Desolace Dew","b5c1a9"],["Devil’s Butterfly","bb4422"],["Dew Pointe","d7ede8"],["Diamond Black","2b303e"],["Diesel","322c2b"],["Dijon Mustard","e2ca73"],["Diluted Mint","daf4ea"],["Dimple","e9808b"],["Direct Green","3f8a24"],["Dirty Snow","cdced5"],["Discrete Pink","ebdbdd"],["Distant Shore","c2d8e3"],["Diva","c9a0ff"],["Divine Pleasure","f4efe1"],["Dodie Yellow","fef65b"],["Dolly Cheek","fcc9b6"],["Döner Kebab","bb7766"],["Dòu Lǜ Green","009276"],["Double Spanish White","d2c3a3"],["Dovetail","908a83"],["Downtown Benny Brown","7d6a58"],["Dragon Fruit","d75969"],["Drama Queen","a37298"],["Dreamcatcher","a5b2a9"],["Dreamy Sunset","ffad61"],["Dried Bay Leaf","8c854f"],["Dried Lilac","bbbbff"],["Drifting Downstream","61736f"],["Drizzling Mist","989d9f"],["Drumskin","e7d7b9"],["Dry Lichen","c7d9cc"],["Dublin Jack","6fab92"],["Duck Willow","6a695a"],["Dull Blue","49759c"],["Dull Teal","5f9e8f"],["Duomo","6e6064"],["Duskwood","123d55"],["Dusky Moon","edecd7"],["Dust of the Moon","cfc9df"],["Dusty Chestnut","847163"],["Dusty Path","8c7763"],["Dutch Cocoa","8c706a"],["Dwindling Denim","cce1ee"],["E. Honda Beige","f8d77f"],["Early Dawn","797287"],["Earth Black","49433b"],["Earthen Cheer","667971"],["East Aurora","878b46"],["Eastern Gold","b89b6c"],["Eat Your Peas","80987a"],["Eccentric Magenta","b576a7"],["Eclectic Purple","483e45"],["Edelweiss","eee8d9"],["Effervescent Blue","00315a"],["Eggplant Tint","531b93"],["Egyptian Pyramid","c19a7d"],["El Caramelo","946e48"],["Eleanor Ann","40373e"],["Electric Laser Lime","26ff2a"],["Electric Ultramarine","3f00ff"],["Elegant Purple Gown","552367"],["Elf","1b8a6b"],["Elizabeth Rose","fadfd2"],["Elusion","d2cfcc"],["Embarrassed","ee7799"],["Emerald Coast","009185"],["Emerald Rush","50c777"],["Eminence","6e3974"],["Empire Gold","c19f6e"],["Enamel Antique Green","427f85"],["Enchanted Isle","8ec5c0"],["Encounter","ff9552"],["Endless Silk","ddddbb"],["Energy Yellow","f5d752"],["English Manor","7181a4"],["Enjoyable Yellow","f5d6a9"],["Envious Pastel","ddf3c2"],["Epic Adventure","0e426f"],["Equestrian Leather","5b5652"],["Escape Grey","abac9f"],["Espresso Tonic","c18b5b"],["Estuary Blue","70a5b7"],["Ethereal Espresso","3e2723"],["Étude Naturelle","55bb11"],["Evaporation","d1d5d3"],["Evening Glow","fdd792"],["Evening Slipper","a99ec1"],["Evergreen Field","47534f"],["Evil Forces","770022"],["Exclusive Plum","736f78"],["Exotic Flower","ffa24c"],["Experience","64acb5"],["Exquisite","c8a3bb"],["Extreme Carrot","ff7133"],["Eyelash Viper","f4c54b"],["Fabulous Grape","9083a5"],["Faded Khaki","a5975b"],["Faded Yellow","feff7f"],["Faint Clover","b2eed3"],["Fair Maiden","f1e7dc"],["Fairy Dust","ffe8f4"],["Fait Accompli","1f3636"],["Fall Foliage","c28359"],["Fallen Rock","8b8072"],["Fanatic Fuchsia","ee1199"],["Fantan","9f7e53"],["Farm Straw","d5b54c"],["Fashion Mauve","b5a8a8"],["Fatty Fuchsia","ee0077"],["Feather","dad9ce"],["Feathery Lilac","ece7ed"],["Felicity","e5e4df"],["Fennec Fox","dad7c8"],["Fern Canopy","758a5f"],["Ferocious Fuchsia","aa00cc"],["Festival Green","6ea43c"],["Fickle Pickle","8b851b"],["Field Time Green","649050"],["Fiery Rose","ff5470"],["Fig Leaf","556b2f"],["Filigree Green","a5af89"],["Fine Gold","daa826"],["Fingerpaint","8a7e61"],["Fire Ant","be6400"],["Fire Opal","fd3c06"],["Firefly","314643"],["First Blush","f4edec"],["First of the Month Green","24d427"],["Fish Finger","eecc55"],["Fizzle","d8e4de"],["Flame Angelfish","fd4c29"],["Flaming June","eebb66"],["Flare","fcaf52"],["Flattered Flamingo","ee6655"],["Flax Straw","cbaa7d"],["Flickering Flame","aa6e49"],["Flint Purple","42424d"],["Flirty Rose","d65e93"],["Flor Lila","e0e0eb"],["Florentine Clay","c1937a"],["Flower Blossom Pink","f27987"],["Flowering Chestnut","875657"],["Fluorescent Lime","bdc233"],["Fly Away","85b3f3"],["Fog","d6d7d2"],["Foggy Morn","cad0ce"],["Folk Song","65a19f"],["Football Pitch","528e39"],["Forest Berry","956378"],["Forest Lichen","9aa22b"],["Forest Trail","a88b83"],["Forged Steel","5b5b59"],["Formal Garden","3a984d"],["Fossil","867367"],["Fountain Foam","c6d0c6"],["Foxy Fuchsia","9f00c5"],["Fragrant Wand","adb1c1"],["Free Green","74a690"],["Freezy Breezy","99eeee"],["French Grey Linen","cac8b6"],["French Pass","a4d2e0"],["French Taupe","d3c2bf"],["Fresh Acorn","d2693e"],["Fresh Clay","be8035"],["Fresh Grown","f0f7c4"],["Fresh Mown","93b654"],["Fresh Praline","e7bb95"],["Fresh Up","dfebb1"],["Freshwater Pearls","e3e1dd"],["Friends","e8c5c1"],["Frog Pond","73b683"],["Frost","e1e4c5"],["Frosted Iris","b1b9d9"],["Frosting Cream","fffbee"],["Frosty Pine","c7cfbe"],["Frozen Edamame","9ca48a"],["Frozen State","26f7fd"],["Fruit Shake","f39d8d"],["Fuchsia Flock","ab446b"],["Fudge Truffle","604a3f"],["Full Bloom","fbcdc3"],["Funchal Yellow","b6884d"],["Furious Frog","55ee00"],["Fusion Red","ff6163"],["Fuzzy Wuzzy Brown","c45655"],["Galactic Civilization","442288"],["Galapagos Green","29685f"],["Gallery Blue","9bbce4"],["Game Over","7e8181"],["Garden Aroma","9c6989"],["Garden Goddess","99cea0"],["Garden Path","424330"],["Garden Statue","bfd4c4"],["Gargantua","eeee55"],["Garnet Sand","cc7446"],["Gatsby Brick","8e3b2f"],["Geek Chic","b0a677"],["Geneva Morn","bab7b8"],["Gentle Calm","c4cebf"],["Gentle Sea","b0c8d0"],["Georgia Peach","f97272"],["Germania","ddc47e"],["Ghost Whisperer","cbd1d0"],["Giant’s Club","b05c52"],["Gilded Pesto","bbaf5e"],["Ginger Crunch","ceaa64"],["Ginger Shortbread","e3cec6"],["Ginkgo Green","a5aca4"],["Give Me Your Love","ee88ff"],["Glacier Lake","62b4c0"],["Glamorous","b74e64"],["Glass Violet","b7a2cc"],["Glazed Ringlet","89626d"],["Glimpse Into Space","121210"],["Glittering Gemstone","dec0e2"],["Glorious Gold","cba956"],["Glowing Green","d0d4c0"],["Go Ben","786e4c"],["Goblet Waxcap","db4731"],["Going Grey","83807a"],["Gold Dust","a4803f"],["Gold Pheasant","c6795f"],["Gold Tips","e2b227"],["Golden Apricot","dba950"],["Golden Buff","f8e6c8"],["Golden Cricket","d7b056"],["Golden Gate Bridge","c0362d"],["Golden Handshake","ffcc44"],["Golden Koi","eaa34b"],["Golden Nugget","d78e48"],["Golden Pop","ebcebd"],["Golden Scarab","eddb8e"],["Golden Ticket","f5cc23"],["Goldfinger","eebb11"],["Goluboy Blue","8bb9dd"],["Good Samaritan","3f6782"],["Gorā White","f0f0e0"],["Gossamer Green","b2cfbe"],["Gothic Spire","7c6b6f"],["Graceful Grey","beb6ac"],["Gram’s Hair","f5f6f7"],["Grand Heron","ecece1"],["Grandview","6b927f"],["Granny Apple","c5e7cd"],["Grape Compote","725f7f"],["Grape Kiss","82476f"],["Grape Vine","797f5a"],["Graphite","383428"],["Grass Skirt","e2dac2"],["Gratefully Grass","71714e"],["Greasy Green Beans","a2b35a"],["Great Tit Eggs","e9e2db"],["Greek Isles","bbdcf0"],["Green Ash","95d6a1"],["Green Bonnet","8bb490"],["Green Cow","beef69"],["Green Emulsion","daeae2"],["Green Frosting","d8f1eb"],["Green Glint","dcf1c7"],["Green Grass","39854a"],["Green Jelly","349b82"],["Green Masquerade","8dbc8a"],["Green Not Found","404404"],["Green People","388004"],["Green Seduction","44aa33"],["Green Sulphur","9e8528"],["Green Valley","51755b"],["Green Yellow","c6f808"],["Greenish Beige","c9d179"],["Greenland Green","22acae"],["Grenache","8e6268"],["Grey by Me","a1988b"],["Grey Glimpse","e0e4e2"],["Grey Morn","cabeb5"],["Grey Ridge","847986"],["Grey Summit","959491"],["Greyhound","b2aca2"],["Greystone","b7b9b5"],["Grinch Green","93b83d"],["Grouchy Badger","6f675c"],["Growing Nature","88cc11"],["Guava","ff982e"],["Gulab Brown","8b2e19"],["Gully Green","4b6e3b"],["Gunny Sack","dcd3bc"],["H₂O","bfe1e6"],["Hagstone Choir","8b837d"],["Halcyon Green","9baaa2"],["Halloween Punch","dd2211"],["Hampton","e8d4a2"],["Handmade Red","a87678"],["Happy Cement","979ea1"],["Hapsburg Court","e2d4d6"],["Hardware","8b8372"],["Harold","6d6353"],["Harvest Gold","eab76a"],["Hatoba Pigeon","95859c"],["Havana Blue","a5dbe5"],["Hawaiian Passion","ffa03e"],["Hawkesbury","729183"],["Hazel Blush","eae2de"],["Hazy Grove","f2f1dc"],["Healing Aloe","b9cab3"],["Heartfelt","ffadc9"],["Heat Signature","e3000e"],["Heather Sachet","7b7173"],["Heavenly Sky","6b90b3"],["Heavy Metal","46473e"],["Heidelberg Red","960117"],["Heisenberg Blue","70d4fb"],["Hello Spring","44dd66"],["Henna Red","6e3530"],["Herb Blend","4b856c"],["Herbalist’s Garden","119900"],["Hero","005d6a"],["Hibernate","aca69f"],["Hickory Plank","614539"],["Hidden Morel","aa7c4c"],["High Altar","334f7b"],["High Plateau","e4b37a"],["High Tea Green","567063"],["Highlighter Blue","3aafdc"],["Hill Giant","e0eedf"],["Himalayan Mist","e1f0ed"],["Hint of Orange","f8e6d9"],["Hippolyta","cfc294"],["Hit Grey","a1adb5"],["Hokey Pokey","bb8e34"],["Holland Tulip","f89851"],["Hollywood","c7af4a"],["Home Brew","897b66"],["Homoeopathic Lavender","e5e0ec"],["Honey Baked Ham","ffaa99"],["Honey Fungus","d18e54"],["Honey Nougat","e0bb96"],["Honeydew Melon","e6eccc"],["Hong Kong Skyline","676e7a"],["Hopeful","f2d4e2"],["Horn of Plenty","bba46d"],["Horsing Around","9a6c39"],["Hot Chilli","b7513a"],["Hot Green","25ff29"],["Hot Shot","ec4f28"],["House Sparrow’s Egg","d6d9dd"],["Huckleberry Brown","71563b"],["Humid Cave","c9ccd2"],["Hunting Boots","6b5a54"],["Hushed Lilac","6e8fb4"],["Hyacinth White Soft Blue","c1c7d7"],["Hydroport","5e9ca1"],["Hyssop","6d4976"],["Ice Age","c6e4e9"],["Ice Crystal Blue","a6e3e0"],["Ice Gull Grey Blue","9bb2ba"],["Ice Yellow","fefecd"],["Iced Copper","d0ae9a"],["Icelandic Water","0011ff"],["Icy Bay","e0e5e2"],["Icy Tundra","f7f5ec"],["Iguana","878757"],["Illusive Dream","e1d5c2"],["Impala","f4cf95"],["Imperial Primer","21303e"],["Imrik Blue","67aed0"],["In the Pink","f4c4d0"],["Incarnadine","aa0022"],["India Trade","e0a362"],["Indian Pink","ad5b78"],["Indiglow","301885"],["Indigo Ink Brown","393432"],["Indocile Tiger","b96b00"],["Industrial Turquoise","008a70"],["Infinitesimal Green","d7e4cc"],["Ink Black","252024"],["Inner Child","f1bdb2"],["Insignia","285294"],["Intense Brown","7f5400"],["Intergalactic Blue","afe0ef"],["Intimate White","f0e1d8"],["Inuit Blue","d8e4e7"],["Ionic Sky","d0ede9"],["Iris Ice","e0e3ef"],["Irish Linen","eee4e0"],["Iron Frost","6f797e"],["Ironside Grey","706e66"],["Island Coral","d8877a"],["Isle of Capri","0099c9"],["Italian Fitch","d0c8e6"],["Ivory Brown","c4b8a9"],["Ivory Ridge","d9c9b8"],["Izmir Pink","ceb0b5"],["Jack-O-Lantern","d37a51"],["Jade Dust","ceddda"],["Jade Spell","c1e5d5"],["Jaguar","29292f"],["Jambalaya","f7b572"],["Japanese Fern","b5b94c"],["Japanese Yew","d8a373"],["Jasper Park","4a6558"],["Jazzy","c31e4e"],["Jellyfish Blue","95cad0"],["Jet Stream","bbd0c9"],["Jīn Zōng Gold","8e7618"],["Joie de Vivre","bc86af"],["Journey Into Night","016584"],["Jube","4b373c"],["Juicy Jackfruit","eedd33"],["June Day","ffe182"],["Jungle Juice","a4c161"],["Juniper Green","567f69"],["Just Ducky","ffba45"],["Kabuki","a73a3e"],["Kalahari Sunset","9f5440"],["Kangaroo Pouch","bda289"],["Karma Chameleon","9f78a9"],["Keemun","a49463"],["Ken Masters Red","ec2c25"],["Kerr’s Pink Potato","b57281"],["Key Wester","d5af91"],["Kid Icarus","a81000"],["Kimberley Tree","b8c1b1"],["Kindness","d4b2c0"],["King Tide","2a7279"],["Kingfisher Turquoise","7ab6b6"],["Kirsch","b2132b"],["Kissed by a Zombies","b15363"],["Kiwi Crush","7bc027"],["Knighthood","3c3f52"],["Kobi","e093ab"],["Kokiake Brown","7b3b3a"],["Konkikyō Blue","191f45"],["Krameria","cd48a9"],["Kung Fu","643b42"],["Kyo Purple","9d5b8b"],["La Salle Green","087830"],["Lacey","caaeab"],["Lady Luck","47613c"],["Lagoon Rock","43bcbe"],["Lake Bluff Putty","d9cfb5"],["Lake Winnipeg","80a1b0"],["Lambskin","ebdcca"],["Land of Trees","e0d5b9"],["Lantern Gold","ffd97d"],["Laredo Road","c7994f"],["Laser Trap","ff3f6a"],["Latin Charm","292e44"],["Laurel","6e8d71"],["Lava","cf1020"],["Lavender Ash","9998a7"],["Lavender Crystal","956d9a"],["Lavender Illusion","a99ba7"],["Lavender Pearl","ede5e8"],["Lavender Spectacle","9392ad"],["Lavish Green","7ed0b7"],["Lazy Lichen","6e6e5c"],["Leadbelcher","cacacb"],["Leafy Woodland","aabb11"],["Leather Work","8a6347"],["Legacy Blue","9ec9e2"],["Lemon Appeal","efe4ae"],["Lemon Curry","cda323"],["Lemon Juice","ffffec"],["Lemon Slice","fffba8"],["Lemon Whip","ffe6ba"],["Lenurple","ba93d8"],["Let It Snow","d8f1f4"],["Lewisham","675a49"],["Libra Blue Morpho","4cd5ff"],["Lickety Split","c3d997"],["Ligado","cdd6c2"],["Light Blond","e8d3af"],["Light Brume","d6d5d2"],["Light Christobel","dfd3ca"],["Light Deluxe Days","a4d4ec"],["Light French Grey","c9cfcc"],["Light Green Veil","e8f4d2"],["Light Katsura","d6ead8"],["Light Livingstone","d8d7ca"],["Light Mosque","d8cdd0"],["Light Patina","c0c2b4"],["Light Pink Polar","d8c9cc"],["Light Rattan","d1c1aa"],["Light Sea Spray","abd6de"],["Light Silverton","cee3d9"],["Light Stargate","c7d2dd"],["Light Tomato","d0756f"],["Light Whimsy","99d0e7"],["Lighthouse View","d9dcd5"],["Likeable Sand","d1b7a8"],["Lilac Fluff","c8a4bf"],["Lilac Muse","e9e8e5"],["Lili Elbe’s Pink","d4a1b0"],["Lilylock","e0e1c1"],["Lime Drop","eac13d"],["Lime Mist","ddffaa"],["Lime Splash","cfdb8d"],["Limeño Limón","f8b109"],["Limitless","f0ddb8"],["Limuyi Yellow","fefc7e"],["Lingering Lilac","e6def0"],["Linseed","b0a895"],["Lionheart","cc2222"],["Liquid Mercury","757a80"],["Lithic Sand","53626e"],["Little Lilac","e0d8df"],["Lively Ivy","b3ae87"],["Living Coral","ff6a52"],["Lobelia","7498be"],["Loden Frost","788f74"],["Lolita","bf2735"],["Lonely Chocolate","4a0a00"],["Longing for Nature","4b9f5d"],["Lorian","8ebcbd"],["Lost River","08457e"],["Loud Lime","88ff22"],["Love Fumes","fdd0d5"],["Lovebirds","c76a77"],["Lover’s Hideaway","d0c6b5"],["Loyal Blue","01455e"],["Lucky Bamboo","93834b"],["Ludicrous Lemming","bb8877"],["Luminous Lavender","bf8fe5"],["Lunar Federation","868381"],["Lunch Box","f2ca95"],["Luscious Lobster","c5847c"],["Lush Meadow","007351"],["Lusty Red","b1383d"],["Lychee","cd0c41"],["Maastricht Blue","001c3d"],["Macchiato","928168"],["Madagascar Pink","d194a1"],["Madera","eed09d"],["Magenta Haze","a44775"],["Maggie’s Magic","ddeee2"],["Magic Mountain","717462"],["Magical Stardust","eaeadb"],["Magnitude","ae8d7b"],["Mahogany Spice","5b4646"],["Maison Blanche","dfd2bf"],["Majestic Orchid","8d576d"],["Majorca Green","808337"],["Maldives","00bbdd"],["Mallardish","3a4531"],["Mamba Yellow","fdd014"],["Mandalay Road","a05f45"],["Manga Pink","f5b9d8"],["Mango Nectar","ffd49d"],["Maniac Mansion","004058"],["Manticore Wing","dd7711"],["Maple Leaf","d17b41"],["Marble White","f2f0e6"],["Marigold Dust","f5cc3d"],["Marine Tinge","33a3b3"],["Marlin","515b87"],["Marquisette","f3d49d"],["Marsh Fog","c6d8c7"],["Marshmallow Whip","f9efe0"],["Martinique","3c3748"],["Masoho Red","d57c6b"],["Matcha Ash","35382d"],["Matt Sage","b2b9a5"],["Maud","988286"],["Mauve Jazz","908186"],["Mauve Pansy","bebbc0"],["Mauvey Pink","8c8188"],["Maximum Yellow Red","f2ba49"],["Maybeck Muslin","eddfc9"],["Meadow Dew","e2d4ad"],["Meadowland","807a55"],["Mecha Metal","848393"],["Medicine Man","69556d"],["Medium Aquamarine","66ddaa"],["Medium Persian Blue","0067a5"],["Medium Violet Red","c71585"],["Megaman","3cbcfc"],["Melbourne","4c7c4b"],["Mellow Mauve","9c6579"],["Melon Balls","f2bd85"],["Melondrama","ee8170"],["Melting Sunset","eaab7d"],["Mental Floss","deb4c5"],["Meringue","f3e4b3"],["Mermaid Dreams","0088bb"],["Mesa Peach","c19180"],["Message Green","37b8af"],["Metallic Bronze","554a3c"],["Metroid Red","f83800"],["Mexican Red Papaya","c6452f"],["Miami White","ccccee"],["Mid Tan","c4915e"],["Middle Yellow","ffeb00"],["Midnight Escapade","2b3458"],["Midnight Magic","46474a"],["Midnight Serenade","41434e"],["Midsummer Nights","0011ee"],["Milano","c1a181"],["Milk","fdfff5"],["Milk Toast","d1b39c"],["Milky Way Galaxy","faefd5"],["Mimesia Blue","2269ca"],["Mineral Blue","6d9192"],["Ming","407577"],["Minified Maroon","e5dbda"],["Mink Brown","67594c"],["Mint Chiffon","e6fdf1"],["Mint Green","487d4a"],["Mint Smoothie","c5e6d1"],["Minted Blueberry Lemonade","b32651"],["Minuette","d47791"],["Mirrored Willow","8e876e"],["Mission Stone","dac5b6"],["Mistletoe Kiss","98b489"],["Misty Harbour","65769a"],["Misty Moonstone","e5e0cc"],["Mixed Berries","96819a"],["Mocha Accent","8d8171"],["Mocha Wisp","918278"],["Modern Mint","88a395"],["Mohair Mauve","bfa59e"],["Molasses Cookie","8b714b"],["Mom’s Pancake","f5c553"],["Monarch’s Cocoon","8cb293"],["Money Banks","aabe49"],["Monster Monstera","2f8351"],["Monterey Chestnut","7d4235"],["Moody Black","49555d"],["Moon Landing","a7a7a7"],["Moonless Mystery","1e2433"],["Moonlit Ocean","30445a"],["Moor Oak Grey","6a584d"],["Moray","c8bd6a"],["Morning Blush","f9e8df"],["Morning Light Wave","e0efe9"],["Morning Sunlight","fdefcc"],["Moroccan Ruby","8d504b"],["Mortar Grey","9e9f9e"],["Moss Candy","8aa775"],["Moss Vale","38614c"],["Mossy Pavement","908c7e"],["Moth’s Wing","edf1db"],["Mount Eden","e7efe0"],["Mountain Falls","bdcac0"],["Mountain Laurel","f4c8d5"],["Mountain Quail","605b57"],["Mournfang Brown","6f5749"],["Movie Star","c52033"],["Mt. Rushmore","7f8181"],["Mudbrick","a46960"],["Mudslide","84735f"],["Mulberry Thorn","c57f2e"],["Mulu Frog","55bb00"],["Murky Depths","02273a"],["Mushroom Bisque","cab49b"],["Muslin","d3d1c4"],["Mustard on Toast","ddcc33"],["Muted Purple","805b87"],["Mykonos Blue","005780"],["Mysterious Mixture","0f521a"],["Mystic Mauve","dbb7ba"],["Mystical Purple","745d83"],["Mythical Orange","ff7f49"],["Naked Clay","c8a397"],["Nantucket Bay","7d9192"],["Nārangī Orange","ff8050"],["Natchez Moss","b1a76f"],["Natural Candy Pink","e4717a"],["Natural Order","77b033"],["Natural Yellow","eed88b"],["Nature’s Gate","666a60"],["Navajo Horizon","a48679"],["Navy Cosmos","57415c"],["Nebula","a104c3"],["Nectarine Spice","d29b8d"],["Neon Fuchsia","fe4164"],["Neptune","007dac"],["Netsuke","e0cfb0"],["Nevada Sand","ead5b9"],["New Bulgarian Rose","482427"],["New Harvest Moon","eddfc7"],["New Neutral","bec0aa"],["New Wheat","d2af6f"],["Niagara Falls","cbe3ee"],["Nifty Turquoise","019187"],["Night Gull Grey","615d5c"],["Night Red","3c2727"],["Night View","465560"],["Nightly Blade","5a7d9a"],["Nightwalker","161d3b"],["Nine Iron","46434a"],["№5","f8d68b"],["Noble Honour","69354f"],["Nocturnal Green","2f3738"],["Nomadic Dream","dbdedb"],["Nordic Forest","317362"],["North Cape Grey","7a9595"],["Northern Glen","536255"],["Norwegian Blue","78888e"],["Not yet Caramel","b1714c"],["Nouveau Green","b88127"],["November Skies","7cafb9"],["Nuit Blanche","1e488f"],["Nut","9e8a6d"],["Nutter Butter","f7d4c6"],["O’grady Green","58ac8f"],["Oarsman Blue","648d95"],["Oats and Honey","e7bf81"],["Obsidian Brown","523e35"],["Ocean Bubble","8cadcd"],["Ocean Horizon","7fc1d8"],["Ocean Slumber","41767b"],["Oceanic Motion","1d5c83"],["Octarine","ccdd00"],["Off Black","303030"],["Office Grey","635d54"],["Oh so Red","c74536"],["Oitake Green","5e644f"],["Old Brick","8a3335"],["Old Flame","f2b7b5"],["Old Lavender","796878"],["Old Prune","8272a4"],["Old Willow Leaf","756947"],["Olive Boat","957c4c"],["Olive Martini","ced2ab"],["Olive Thrill","6d8e2c"],["Olympic Blue","4f8fe6"],["Onahau","c2e6ec"],["Only Oatmeal","d4cdb5"],["Opal Violet","7e8fbb"],["Opening Ribbon","bd273a"],["Opulent Green","103222"],["Orange Ballad","b56d41"],["Orange Danger","dd6600"],["Orange Juice","ff7f00"],["Orange Pop","ffbc3e"],["Orange Spice","fea060"],["Orangery","e6bca9"],["Orchid Ash","c3ccd5"],["Orchid Lei","9c4a7d"],["Ore Bluish Black","1c3339"],["Organic Field","c6c2ab"],["Orioles Orange","fb4f14"],["Orpington Chicken","be855e"],["Otter","7f674f"],["Outback","c9a375"],["Outrigger","82714d"],["Overexposed Shot","eff4dc"],["Owl Manner Malt","c0af87"],["Oyster","e3d3bf"],["Ozone Blue","c7d3e0"],["Pacific Fog","dcdcd5"],["Pacifica","4e77a3"],["Pagoda Blue","1b8192"],["Paisley","726f7e"],["Palatinate Blue","273be2"],["Pale Blue","d0fefe"],["Pale Cornflower","ced9e1"],["Pale Grey Magenta","e7d8ea"],["Pale Linen","ebe5d6"],["Pale Organza","fdebbc"],["Pale Pink","efcddb"],["Pale Sienna","dfc7bc"],["Pale Whale","b6d3df"],["Pallid Orange","fcb99d"],["Palmito","eaeacf"],["Panache","ebf7e4"],["Pango Black","4e4f6a"],["Papaya","fe985c"],["Paper White","f6efdf"],["Paradise Bird","ff8c55"],["Parakeet Blue","7eb6ff"],["Paris Daisy","fbeb50"],["Park Bench","537f6c"],["Parmesan","ffffdd"],["Particular Mint","d0d2c5"],["Passageway","647b86"],["Passionate Purple","882299"],["Pastel Jade","d2f0e0"],["Pastel Rose Tan","e4c5b0"],["Patches","8a7d6b"],["Patisserie","eddbc8"],["Paved With Gold","e8d284"],["Pea","a4bf20"],["Peaceful Purple","660088"],["Peach Brick","e5ccbd"],["Peach Dust","f0d8cc"],["Peach Melba","fbbdaf"],["Peach Puff","ffdab9"],["Peach Temptation","f2c5b2"],["Peachy","ffa67a"],["Peachy Tint","e3a381"],["Peanut Brittle","a6893a"],["Pearl Bay","7fc6cc"],["Pearl Sugar","f4f1eb"],["Peas Please","8c7f3c"],["Pebble Walk","afb2a7"],["Pedigrey","8f8e8c"],["Pelican Feather","e8c3c2"],["Pennywise","a2583a"],["Pepperberry","c79d9b"],["Peppermint Twist","96ced5"],["Perfect Dark","313390"],["Perfect White","f0eeee"],["Périgord Truffle","524a46"],["Perky","408e7c"],["Persian Delight","efcada"],["Persian Red","cc3333"],["Pervenche","0099ee"],["Petal of a Dying Rose","9f0630"],["Petrel","4076b4"],["Petunia Patty","4b3c4b"],["Phantom","6e797b"],["Pheasant’s Egg","e0dcd7"],["Philippine Red","ce1127"],["Phosphor Green","00aa00"],["Pi²","986960"],["Pick of the Litter","b8a49b"],["Pickled Lemon","ddcc11"],["Pico Eggplant","7e2553"],["Piedmont","c2cec5"],["Piggy Bank","ffccbb"],["Pimento Grain Brown","6c5738"],["Pindjur Red","bb4411"],["Pine Hutch","ecdbd2"],["Pineapple","563c0d"],["Pineapple Whip","ead988"],["Pink Ballad","a6427c"],["Pink Cashmere","ecbab3"],["Pink Currant","fed5e9"],["Pink Elephants","ff99ee"],["Pink Frenzy","edb0c7"],["Pink Hysteria","fe01b1"],["Pink Lotus","fadbd7"],["Pink Orchid","da70d6"],["Pink Pearl","e7accf"],["Pink Poison","ff007e"],["Pink Quartz","ffbbee"],["Pink Sherbet","f780a1"],["Pink Touch","fae2d6"],["Pinkish","d46a7e"],["Pinky Swear","eeaaee"],["Pirat’s Wine","71424a"],["Pistachio Dream","a5cf8c"],["Pitch Cobalt","2d3d4a"],["Pixie Powder","391285"],["Placebo Orange","fcf5eb"],["Planet Earth","daddc3"],["Plaster","eaeaea"],["Platinum Granite","807f7e"],["Playful Plum","ba99a2"],["Ploughed Earth","6c6459"],["Plum Fuzz","313048"],["Plum Passion","9b4b80"],["Plum Swirl","957e8e"],["Plumville","9e8185"],["Plymouth Beige","ddd3c2"],["Poetic Yellow","fffed7"],["Poison Ivy","00ad43"],["Poker Green","35654d"],["Polar White","e6efec"],["Polished Garnet","953640"],["Polite White","e9ddd4"],["Polypropylene","eaeae8"],["Pompeius Blue","77a8ab"],["Pont Moss","5f9228"],["Pool Tide","70928e"],["Poppy","c23c47"],["Porcelain","dddcdb"],["Porcelain Skin","ffe7eb"],["Porpoise","dbdbda"],["Portal Entrance","f8f6da"],["Portuguese Dawn","c48f85"],["Positively Purple","7782a3"],["Posy Green","366254"],["Potter’s Pot","845c40"],["Pouty Pink","f9a7a4"],["Powder Viola","cbc2d3"],["Powdered Sage","b7b38d"],["Prairie Clay","935444"],["Prairie Sand","883c32"],["Pre-Raphaelite","8b7f7a"],["Precision","2c3944"],["Preserve","4a3c50"],["Presumption","5e6277"],["Pretty Posie","bcbde4"],["Primal Rage","f4301c"],["Primrose White","ece4d0"],["Princess Ivory","faead5"],["Pristine Petal","d5e1e0"],["Prized Celadon","a2c0b9"],["Promised Amethyst","686278"],["Proton Red","840804"],["Prunella","864788"],["Pueblo Sand","e7c3a4"],["Pulled Taffy","f1d6bc"],["Pumpkin Cream","e6c8a9"],["Pumpkin Vapour","ffa74f"],["Puppy Paws","ead2bc"],["Pure Passion","b40039"],["Purple Agate","988eb4"],["Purple Cheeks","b67ca2"],["Purple Earth","624646"],["Purple Grapes","736993"],["Purple Illusion","b8b8f8"],["Purple Odyssey","643e65"],["Purple Plum","9c51b6"],["Purple Ragwort","8c8798"],["Purple Sphinx","563948"],["Purple Taupe","50404d"],["Purple Wine","97397f"],["Purplish White","dfd3e3"],["Putting Bench","f1e4c9"],["Pyrite Slate Green","867452"],["Quail Valley","ab9673"],["Quartz","d9d9f3"],["Queen of Hearts","98333a"],["Queenly","d3acce"],["Quiet Abyss","160435"],["Quiet Pond","94d8e2"],["Quill Grey","cbc9c0"],["Quintessential","c2dbc6"],["Rachel Pink","e8b9ae"],["Radiant Orchid","ad5e99"],["Radioactive Lilypad","66dd00"],["Rage","ff1133"],["Rain","abbebf"],["Raindrop","9ec6c6"],["Rainwater","87d9d2"],["Rakuda Brown","bf794e"],["Ranch Tan","c8b7a1"],["Rapids","52c7c7"],["Rare Rhubarb","cc0022"],["Raspberry Jelly Red","9b6287"],["Raspberry Shortcake","ff3888"],["Rave Regatta","00619d"],["Raw Cashew Nut","c8beb1"],["Ray of Light","fdf2c0"],["Real Cork","c1a17f"],["Rebel Red","cd4035"],["Red Bean","3d0c02"],["Red Chalk","ed7777"],["Red Damask","cb6f4a"],["Red Gooseberry","604046"],["Red Jalapeño","c01141"],["Red Mulled Wine","880022"],["Red Pepper","7a3f38"],["Red Red Red","91403d"],["Red Rumour","693f43"],["Red Terra","ae4930"],["Red-Eye","dd1155"],["Reddish Orange","f8481c"],["Reduced Turquoise","daece7"],["Reef Gold","a98d36"],["Refreshed","cfe587"],["Regale Blue","7db5d3"],["Reindeer Moss","bdf8a3"],["Relief","bf2133"],["Renew Blue","9cb8b5"],["Reptilian Leader","8f9961"],["Resort Tan","907d66"],["Restrained Gold","d2b084"],["Retro Vibe","cb9711"],["Reynard","b46848"],["Rhinox Hide","493435"],["Rhythm COLORDATA_PLACEHOLDER Blues","70767b"],["Rich Blue","021bf9"],["Rich Honey","f9bc7d"],["Rich Sorrel","a87c3e"],["Riesling Grape","bfb065"],["Rio Rust","926956"],["Ripe Mango","ffc324"],["Rise and Shine","ffe99e"],["River Fountain","248591"],["Riverbank","ae9e87"],["Riviera Paradise","009a9e"],["Roaring Twenties","b39c9e"],["Roasted Sepia","625342"],["Rock Bottom","484c49"],["Rocket Man","bebec3"],["Rocky Creek","3e4d50"],["Rodeo Dust","c7a384"],["Rokō Brown","665343"],["Romaine Green","a38e00"],["Roman Violet","4d517f"],["Romantic Morn","fcd5cb"],["Roof Tile Green","043132"],["Rookwood Terra Cotta","975840"],["Rosarian","faeadd"],["Rose Coloured Glasses","e5c4c0"],["Rose Fusion","f96653"],["Rose Marquee","a76464"],["Rose Reminder","f4c0c6"],["Rose Turkish Delight","db5079"],["Roseine Plum","7b7fa9"],["Roseville","b495b0"],["Rosy Brown","bc8f8f"],["Rosy Skin","f7b978"],["Rousseau Green","175844"],["Royal Blue Tang","1600fc"],["Royal Glimmer","9791bc"],["Royal Lines","6e3d58"],["Royal Peacock","27ace0"],["Royal Star","fede4f"],["Roycroft Pewter","616564"],["Ruby","ca0147"],["Ruby Star","bb1122"],["Rufous","a81c07"],["Rum Custard","e9cfaa"],["Rural Eyes","99af73"],["Russ Grey","547587"],["Rust Coloured","a46454"],["Rustic Oak","996e58"],["Rusty Heart","a04039"],["Ryoku-Ou-Shoku Yellow","dccb18"],["Sabre Tooth","d4b385"],["Sacro Bosco","229911"],["Safe Haven","5588aa"],["Saffron Gold","f08f00"],["Sage Bundle","bad3c7"],["Sage Wisdom","afad96"],["Sahara Wind","dfd4b7"],["Sailor","445780"],["Saladin","7e8f69"],["Salmon Carpaccio","ee867d"],["Salmon Rose","ff737e"],["Salsa Mexicana","a03413"],["Salt Scrub","d0c6af"],["Salty Breeze","dde2d7"],["Samba","aa262b"],["San Marino","4e6c9d"],["Sand Motif","ddc6a8"],["Sandalwood Grey Blue","005160"],["Sandpoint","eacdb0"],["Sandworm","fce883"],["Sandy Shoes","847563"],["Santa Fe","b16d52"],["Sapling","a3c05a"],["Sapphireberry","c9e5ee"],["Sassy Grass","7a8c31"],["Satin Deep Black","1c1e21"],["Sativa","b5bf50"],["Sausage Roll","ebdfcd"],["Savile Row","c0b7cf"],["Saxony Blue","216b88"],["Scandal","add9d1"],["Scarlet Flame","993366"],["Scenario","81a79e"],["Schiaparelli Pink","e84998"],["Scoop of Dark Matter","110055"],["Scotch Mist","eee7c8"],["Screaming Skull","f0f2d2"],["Scud","acd7c8"],["Sea Breeze Green","c9d9e7"],["Sea Fan Fuchsia","975476"],["Sea Haze Grey","cbd9d4"],["Sea Moss","2c5252"],["Sea Quest","3e7984"],["Sea Swell","018f6b"],["Seafarer","204d68"],["Seal Blue","475663"],["Searing Gorge Brown","6b3b23"],["Seasonal Beige","e6b99f"],["Sebright Chicken","bd5701"],["Secret Glade","b5b88d"],["Security","d6e1c2"],["Seductive Thorns","a2c748"],["Sekkasshoku Brown","683f36"],["Semolina Pudding","ffe8c7"],["Sensual Fumes","cd68e2"],["Sepia Tint","8c7562"],["Sequoia Fog","c5bbaf"],["Serene Journey","cfd8d1"],["Serenity","91a8d0"],["Sesame Seed","e1d9b8"],["Shade of Violet","8601af"],["Shadow Effect","788788"],["Shadowdancer","111155"],["Shady Willow","939689"],["Shalimar","f8f6a8"],["Shān Hú Hóng Coral","fa9a85"],["Sharkskin","808184"],["Shaved Ice","a9b4ba"],["Sheer Green","b0c69a"],["Shell Brook","eee7e6"],["Sherbet Fruit","f8c8bb"],["Shikon","2b2028"],["Shindig","00a990"],["Shiny Nickel","ccd3d8"],["Shire","646b59"],["Shocking Pink","fe02a2"],["Shoreline Haze","d2cbbc"],["Shrimp","e29a86"],["Shutter Blue","666e7f"],["Shy Moment","aaaaff"],["Sicilia Bougainvillaea","ff44ff"],["Sienna Dust","dcc4ac"],["Siesta White","cbdadb"],["Silent Delight","e5e7e8"],["Silentropae Cloud","ccbbbb"],["Silk Elegance","f6e8de"],["Silk Stone","cc9999"],["Silky Green","bdc2bb"],["Silver Bonnet","babab5"],["Silver Fern","e1ddbf"],["Silver Lustre","a8a798"],["Silver Rust","c9a0df"],["Silver Storm","8599a8"],["Silver-Tongued","cdc7c7"],["Similar to Slate","2f4e4e"],["Simply Blue","adbbc9"],["Simpson Surprise","82856d"],["Sinking Sand","d8b778"],["Siskin Sprout","7a942e"],["Skavenblight Dinge","47413b"],["Skipping Stone","d0cbb6"],["Sky Cloud","addee5"],["Sky Watch","8acfd6"],["Skywalker","c1deea"],["Slate Pink","b3586c"],["Sleepless Blue","badbed"],["Slick Blue","73ccd8"],["Slipper Satin","bfc1cb"],["Slumber","2d517c"],["Smell the Roses","bb7283"],["Smoke on the Water","9bacb3"],["Smoked Purple","444251"],["Smokey Tan","9f8c7c"],["Smoky Grape","9b8fa6"],["Smoky Trout","857d72"],["Smouldering Copper","aa6e4b"],["Snappy Happy","eb8239"],["Snot Green","9dc100"],["Snow Pea","6ccc7b"],["Snowbound","ddebe3"],["Snowy Mount","f1eeeb"],["So Fresh so Clean","d8d4d7"],["Soaring Eagle","9badbe"],["Soft Amethyst","cfb7c9"],["Soft Celadon","bfcfc8"],["Soft Focus","e2efdd"],["Soft Kind","d1d2be"],["Soft Peach","eedfde"],["Soft Salmon","eaaaa2"],["Soft Sunrise","f2e3d8"],["Sohi Red","e35c38"],["Solaria","f5d68f"],["Solitude","e9ecf1"],["Sommelier","5d3736"],["Sonnet Grey","c0c7c4"],["Soothing Breeze","b3bec4"],["Sophomore","7d7170"],["Soul Blue","7eadc7"],["Sound Waves","a0c6d7"],["Sour Veil","ffffbf"],["Southern Breeze","e4dfd1"],["Soy Sauce","1a0600"],["Space Dust","002299"],["Spacious Sky","aeb5c7"],["Spanish Gold","b09a4f"],["Spanish Sand","cab08e"],["Sparkling Cider","fffdeb"],["Sparkling Silver","cbd0cd"],["Speakeasy","826a6c"],["Special Ops","868b53"],["Speedwell","b4547e"],["Spice Girl","e1c2c1"],["Spiced Cider","915b41"],["Spiced Rum","ad8b6a"],["Spicy Pink","ff1cae"],["Spinach Souffle","83825b"],["Spirit Blue","323b6c"],["Splash Palace","5984b0"],["Split Rail","8e6c51"],["Sports Blue","399bb4"],["Spring Blossom","e9edbd"],["Spring Forward","babd29"],["Spring Lime","9fc65e"],["Spring Savour","cceecc"],["Spring Walk","acb193"],["Sprinkled With Dew","cfecee"],["Spun Cotton","f3ecdc"],["Squid’s Ink","041330"],["Stable Hay","f6e0be"],["Stamina","b0a8ad"],["Star and Crescent Red","c51f26"],["Star of Gold","ebe3c7"],["Stardust Ballroom","dacfd4"],["Starlight Blue","b5ced4"],["Static","d5d3c3"],["Steamboat Geyser","d2ccb4"],["Steel Legion Drab","7a744d"],["Stellar","46647e"],["Stetson","9e7a58"],["Stillness","d6ebe7"],["Stoic","77454c"],["Stone Fruit","f2a28c"],["Stone Pine","665c46"],["Stoneware","a5978d"],["Storm Cloud","808283"],["Stormy Bay","9aafaf"],["Stormy Waters","84a9b0"],["Stravinsky Pink","77515a"],["Strawberry Cough","990011"],["Strawberry Memory","e2958d"],["Strawberry Spinach Red","fa4224"],["Strike It Rich","d7b55f"],["Strong Mocha","6f372d"],["Studio","724aa1"],["Sturgis Grey","57544d"],["Subnautical","012253"],["Subtle Touch","dbdbd9"],["Suddenly Sapphire","1a5897"],["Sugar Coated Almond","bb6611"],["Sugar Pine","73776e"],["Sugared Almond","b49d7b"],["Sulphur Spring","d5d717"],["Sumatra","f6e8cc"],["Summer Cocktails","ecb6b5"],["Summer House","c8efe2"],["Summer Rain","e1e8db"],["Summer Turquoise","008572"],["Summit","8bb6b8"],["Sun Dust","f6e0a4"],["Sun Wukong’s Crown","ecc033"],["Sunbathed Beach","fad28f"],["Sunday Niqab","3d4035"],["Sunflower Valley","fdbd27"],["Sunlit Glade","98d4a0"],["Sunny Lime","e1ee82"],["Sunrise Heat","caa061"],["Sunset Meadow","a5a796"],["Sunshone Plum","886688"],["Super Pink","ce6ba6"],["Superstar","ffcc11"],["Surf Wash","87ceca"],["Sushi Rice","fff7df"],["Swallowtail","ffe690"],["Swan Lake","c5e5e2"],["Sweet and Sassy","e1c9d1"],["Sweet Buttermilk","fceedd"],["Sweet Desire","aa33ee"],["Sweet Illusion","e0e8ec"],["Sweet Menthol","c2e4bc"],["Sweet Perfume","d49ab9"],["Sweet Sixteen","ffc9d3"],["Sweet Watermelon","fc5669"],["Swimming Pool Green","a8cfc0"],["Swiss Plum","5946b2"],["Symbolic","b29ead"],["System Shock Blue","3a2efe"],["Tadorna Teal","7ad7ad"],["Tahitian Sky","c9e9e7"],["Taiwan Gold","c7aa71"],["Tallarn Leather","947e74"],["Tamboon","bdc8af"],["Tan Temptation","f0bd9e"],["Tangaroa","1e2f3c"],["Tangier","a97164"],["Tank Head","9aa0a2"],["Tanzine","7983d7"],["Tardis","105673"],["Tartan Red","b1282a"],["Tatami Tan","ba8c64"],["Taupe Tone","ada090"],["Tawny Port","643a48"],["Tea Party","ffd7d0"],["Teal Drama","24604f"],["Teal Trinket","4e939d"],["Teasing Peach","f1e1d7"],["Teddy’s Taupe","bcac9f"],["Tempered Grey","a1aeb1"],["Tenacious Tentacles","98f6b0"],["Tenderness","c8dbce"],["Tern Grey","d5cdbd"],["Terrace Pool","a1d8e0"],["Testosterose","ddaaff"],["Texas Hills","c9926e"],["Thai Teal","2e8689"],["Thatched Roof","efe0c6"],["The First Daffodil","fff08c"],["Theatre Blue","21467a"],["They Call It Mellow","fbe4b3"],["Think Brick","834841"],["Thoroughfare","5b3d34"],["Thrilling Lime","8cc34b"],["Thunder Mountain Longhorn Pepper","ce1b1f"],["Thyme and Place","6f8770"],["Tibetan Silk","9c8a52"],["Tidal Teal","43a7aa"],["Tiger Claw","e1daca"],["Tile Blue","0094a5"],["Timberline","73573f"],["Timid Absinthe","dadfb0"],["Tin Man","a4a298"],["Tinted Lilac","9da9d0"],["Tirol","9e915c"],["Toad King","3d6c54"],["Toasted Grain","c5a986"],["Tobacco","684f3c"],["Toffee Sauce","b17426"],["Tomatillo","e9d988"],["Tomato Slices","a2423d"],["Too Big to Whale","9596a4"],["Topaz Green","c5ddd0"],["Tornado","d1d3cf"],["Tosca","744042"],["Touch of Class","8e6f6e"],["Toupe","c7ac7d"],["Toxic Green","61de2a"],["Tractor Red","fd0f35"],["Tragic Juliet","927383"],["Tranquil Retreat","dbd2cf"],["Transparent Beige","f4ecc2"],["Treacle Fudge","de9832"],["Tree Bark Brown","665b4e"],["Tree Sap","cc7711"],["Trendy Green","7e8424"],["Tricot Lilac White","dcd3e3"],["Tristesse","0c0c1f"],["Tropical Bay","9db7af"],["Tropical Green","17806d"],["Tropical Pool","bfdeef"],["Tropical Turquoise","04cdff"],["True Blue","010fcc"],["True Walnut","967a67"],["Trusty Tan","b59f8f"],["Tuffet","a59788"],["Tulipwood","86586a"],["Tupelo Honey","c0a04d"],["Turkish Rose","a56e75"],["Turning Leaf","ced9c3"],["Turquoise Panic","30d5c8"],["Turtle Shell","897c64"],["Tuscan Russet","723d3b"],["Tutuji Pink","e95295"],["Twilight Express","1c3378"],["Twill","a3957c"],["Twisted Blue","76c4d1"],["Tzatziki Green","ddeecc"],["Ultimate Orange","ff4200"],["Ultramarine Highlight","2e328f"],["Umbra","211e1f"],["Under the Radar","476e42"],["Undertow","779999"],["Ungor Beige","d6a766"],["Universal Khaki","b8a992"],["Unusual Grey","a3a7a0"],["Upstream Salmon","ffa8a6"],["Urban Legend","67585f"],["Urobilin","e1ad21"],["Utaupeia","a58f7b"],["Valentine","a53a4e"],["Vallarta Blue","35709d"],["Vampire Love Story","dd0077"],["Vandyck Brown","7b5349"],["Vanilla Iced Coffee","dac2aa"],["Vanillin","f2e3ca"],["Vapour Trail","f5eedf"],["Vegeta Blue","26538d"],["Veiled Violet","b19bb0"],["Velvet Cosmos","441144"],["Velvet Robe","939dcc"],["Venetian","928083"],["Venice Square","e6c591"],["Venus Slipper Orchid","df73ff"],["Verdant Green","167d60"],["Verdigris","43b3ae"],["Vermilion Cinnabar","e34244"],["Vers de Terre","acdfad"],["Vesper Violet","99a0b2"],["Vibrant Honey","ffbd31"],["VIC 20 Pink","ea9ff6"],["Victorian Iris","6d657e"],["Vidalia","a1ddd4"],["Villa Blue","789695"],["Vinca","5778a7"],["Vintage Bloom","c0b0d0"],["Vintage Lincoln","b07b40"],["Vintage Victorian","e59dac"],["Violet Beauty","bab3cb"],["Violet Extract","dee2ec"],["Violet Magician","64338b"],["Violet Sweet Pea","c7c5dc"],["Violet Webcap","833e82"],["Viric Green","99cc00"],["Vision of Light","dfd3cb"],["Vivacious","a7295f"],["Vivid Lime Green","a6d608"],["Vivid Violet","9f00ff"],["Volcanic Rock","6b6965"],["Voyager","4d5062"],["Waikiki","218ba0"],["Walkie Chalkie","faf5fa"],["Walnut Grove","5c5644"],["War God","643530"],["Warm Brown","964e02"],["Warm Fuzzies","f6e2ce"],["Warm Oats","d8cfba"],["Warm Sun","faf6db"],["Warming Peach","e4b9a2"],["Wasabi Nuts","849137"],["Washing Powder Soft Blue","c3d8e4"],["Water Flow","7ac6d9"],["Water Scrub","949381"],["Watercourse","5ccbd6"],["Watermelon Milk","dfcfca"],["Watery Sea","88bfe7"],["Wax","ddbb33"],["Waza Bear","5e5a59"],["Weathered Leather","90614a"],["Weaver’s Spool","bfb18a"],["Weeping Fig","5d8727"],["Well Read","7e633f"],["Westcar Papyrus","a49d70"],["Westhighland White","f3eee3"],["Wet Pavement","9e9f97"],["Whale","7c8181"],["Wheat Flour White","ddd6ca"],["When Worlds Collide","585c79"],["Whipped Cream","f2f0e7"],["Whiskers","f6f1e2"],["Whisper Pink","d4c5b4"],["Whispering Winds","b7c3bf"],["White Blush","fbecd8"],["White Coffee","e6e0d4"],["White Fur","f1efe7"],["White Iris","dfe2e7"],["White Mint","e0e7da"],["White Porcelain","f8fbf8"],["White Shadow","d1d3e0"],["White Wisp","dedbce"],["Whitewashed Fence","faf2e3"],["Wide Sky","416faf"],["Wild Caribbean Green","1cd3a2"],["Wild Hawk","95856d"],["Wild Mustard Seed","caa867"],["Wild River","447382"],["Wild Wilderness","91857c"],["Willow","8c7a48"],["Willowbrook Manor","929d81"],["Wind Rose","e8babd"],["Window Grey","989ea1"],["Windsor Tan","cabba1"],["Windy Blue","aabac6"],["Wine Cork","866d4c"],["Wineberry","663366"],["Winsome Orchid","ccacc1"],["Winter Dusk","b8b8cb"],["Winter Ice","dbdfe9"],["Winter Park","95928d"],["Winter Storm","4b7079"],["Winter Wonderland","b3bfc8"],["Wire Wool","676662"],["Wishy-Washy Green","dfeae1"],["Wispy Mint","bcc7a4"],["Wistful Beige","eaddd7"],["Withered Moss","c5b692"],["Wobbegong Brown","c19a6b"],["Wonka Purple","4a2559"],["Wood-Black Red","584043"],["Woodhaven","9e7b6c"],["Woodrose","ac8989"],["Wool-Milk Pig","dbbdaa"],["Workshop Blue","02667b"],["Woven Cashmere","cabbb4"],["Wu-Tang Gold","f8d106"],["Xiàng Yá Bái Ivory","ece6d1"],["Yanagicha","9c8a4d"],["Yellow","ffff00"],["Yellow Chalk","f5f9ad"],["Yellow Green Shade","c5e384"],["Yellow Metal","73633e"],["Yellow Sea","f49f35"],["Yellow Wax Pepper","ede5b7"],["Yerba Mate","c8c48f"],["Yoghurt Brûlée","f5e9ce"],["Young at Heart","d5a1a9"],["Young Prince","b28ebc"],["Yriel Yellow","ffdb58"],["Yuzu Jam","fdd200"],["Zanzibar Spice","8e7163"],["Zenith","497a9f"],["Zhū Hóng Vermillion","cb464a"],["Zingiber","dac01a"],["Zombie Green","54c571"]];
+
+  // Parse embedded colors into usable format
+  const namedColors = COLOR_DATA.map(([name, hex]) => {
+    const r = parseInt(hex.substr(0,2),16);
+    const g = parseInt(hex.substr(2,2),16);
+    const b = parseInt(hex.substr(4,2),16);
+    return { name, r, g, b };
+  });
+
+  // Find nearest color name using Euclidean distance in RGB space
+  function getColorName(hex) {
+    const rgb = hexToRgb(hex);
+    let minDist = Infinity;
+    let closest = 'Unknown';
+    for (const c of namedColors) {
+      const dr = rgb.r - c.r;
+      const dg = rgb.g - c.g;
+      const db = rgb.b - c.b;
+      const dist = dr*dr + dg*dg + db*db;
+      if (dist < minDist) {
+        minDist = dist;
+        closest = c.name;
+      }
+    }
+    return closest;
+  }
+
+  function updateNameEl(target, name) {
+    const el = target === 'fg' ? fgNameEl : bgNameEl;
+    el.textContent = name;
+    el.classList.remove('loading');
+  }
+
+  // WCAG contrast calculation
+  function hexToRgb(hex) {
+    hex = hex.replace('#', '');
+    if (hex.length === 3) hex = hex[0]+hex[0]+hex[1]+hex[1]+hex[2]+hex[2];
+    const num = parseInt(hex, 16);
+    return { r: (num >> 16) & 255, g: (num >> 8) & 255, b: num & 255 };
+  }
+
+  function relativeLuminance(rgb) {
+    const [rs, gs, bs] = [rgb.r, rgb.g, rgb.b].map(c => {
+      c = c / 255;
+      return c <= 0.04045 ? c / 12.92 : Math.pow((c + 0.055) / 1.055, 2.4);
+    });
+    return 0.2126 * rs + 0.7152 * gs + 0.0722 * bs;
+  }
+
+  function contrastRatio(hex1, hex2) {
+    const l1 = relativeLuminance(hexToRgb(hex1));
+    const l2 = relativeLuminance(hexToRgb(hex2));
+    const lighter = Math.max(l1, l2);
+    const darker = Math.min(l1, l2);
+    return (lighter + 0.05) / (darker + 0.05);
+  }
+
+  function rgbToHsl(r, g, b) {
+    r /= 255; g /= 255; b /= 255;
+    const max = Math.max(r, g, b), min = Math.min(r, g, b);
+    let h, s, l = (max + min) / 2;
+    if (max === min) {
+      h = s = 0;
+    } else {
+      const d = max - min;
+      s = l > 0.5 ? d / (2 - max - min) : d / (max + min);
+      switch (max) {
+        case r: h = ((g - b) / d + (g < b ? 6 : 0)) / 6; break;
+        case g: h = ((b - r) / d + 2) / 6; break;
+        case b: h = ((r - g) / d + 4) / 6; break;
+      }
+    }
+    return { h: Math.round(h * 360), s: Math.round(s * 100), l: Math.round(l * 100) };
+  }
+
+  function updateSwatchLabelColor(target, hex) {
+    const infoEl = document.getElementById(target + 'Info');
+    const wrapper = document.getElementById(target + 'SwatchWrapper');
+    const lum = relativeLuminance(hexToRgb(hex));
+    const textColor = lum > 0.4 ? 'rgba(0,0,0,0.85)' : 'rgba(255,255,255,0.95)';
+    infoEl.style.color = textColor;
+    if (lum > 0.85) {
+      wrapper.classList.add('light-swatch');
+    } else {
+      wrapper.classList.remove('light-swatch');
+    }
+  }
+
+  // Update everything
+  let lightnessChanging = false;
+
+  function update() {
+    if (!lightnessChanging) {
+      syncLightnessFromHex('fg', fgColor);
+      syncLightnessFromHex('bg', bgColor);
+    }
+    const ratio = contrastRatio(fgColor, bgColor);
+    const ratioFixed = ratio.toFixed(2);
+    ratioValueEl.innerHTML = `${ratioFixed}<span class="ratio-suffix"> : 1</span>`;
+
+    if (ratio >= 7) {
+      ratioValueEl.style.color = '#10b981';
+    } else if (ratio >= 4.5) {
+      ratioValueEl.style.color = '#f59e0b';
+    } else {
+      ratioValueEl.style.color = '#ef4444';
+    }
+
+    // Update swatch label text colors based on luminance
+    updateSwatchLabelColor('fg', fgColor);
+    updateSwatchLabelColor('bg', bgColor);
+
+    // Update swatch display backgrounds
+    document.getElementById('fgSwatchDisplay').style.background = fgColor;
+    document.getElementById('bgSwatchDisplay').style.background = bgColor;
+
+    // WCAG checks
+    updateWcag('wcagNormalAA', ratio >= 4.5);
+    updateWcag('wcagNormalAAA', ratio >= 7);
+    updateWcag('wcagLargeAA', ratio >= 3);
+    updateWcag('wcagLargeAAA', ratio >= 4.5);
+    updateWcag('wcagGraphics', ratio >= 3);
+    updateWcag('wcagNonText', ratio >= 3);
+
+    // Preview
+    applyTheme();
+
+    // Details
+    updateDetails('fg', fgColor);
+    updateDetails('bg', bgColor);
+
+    // Names
+    updateNameEl('fg', getColorName(fgColor));
+    updateNameEl('bg', getColorName(bgColor));
+  }
+
+  function updateWcag(id, pass) {
+    const el = document.getElementById(id);
+    el.className = 'wcag-item ' + (pass ? 'pass' : 'fail');
+    const badge = el.querySelector('.wcag-badge');
+    badge.className = 'wcag-badge ' + (pass ? 'pass' : 'fail');
+    const svgPath = pass ? 'M2 6l3 3 5-5' : 'M3 3l6 6M9 3L3 9';
+    badge.innerHTML = `<svg viewBox="0 0 12 12" fill="none" stroke="currentColor" stroke-width="2"><path d="${svgPath}"/></svg>${pass ? 'Pass' : 'Fail'}`;
+  }
+
+  function applyTheme() {
+    document.documentElement.style.setProperty('--fg-dynamic', fgColor);
+    document.documentElement.style.setProperty('--bg-dynamic', bgColor);
+    meshFg = fgColor;
+    meshBg = bgColor;
+  }
+
+  function updateDetails(target, hex) {
+    const rgb = hexToRgb(hex);
+    const hsl = rgbToHsl(rgb.r, rgb.g, rgb.b);
+    const swatch = document.getElementById(target + 'MiniSwatch');
+    swatch.style.backgroundColor = hex;
+    const container = document.getElementById(target + 'DetailRows');
+    const c = '#0a0a14';
+    const lum = relativeLuminance(rgb);
+    container.innerHTML = `
+      <div class="detail-row"><span class="detail-row-label">HEX</span><span class="detail-row-value" style="color:${c}" onclick="copyVal(this)">${hex.toUpperCase()}</span></div>
+      <div class="detail-row"><span class="detail-row-label">RGB</span><span class="detail-row-value" style="color:${c}" onclick="copyVal(this)">${rgb.r}, ${rgb.g}, ${rgb.b}</span></div>
+      <div class="detail-row"><span class="detail-row-label">HSL</span><span class="detail-row-value" style="color:${c}" onclick="copyVal(this)">${hsl.h}°, ${hsl.s}%, ${hsl.l}%</span></div>
+      <div class="detail-row"><span class="detail-row-label">Luminance</span><span class="detail-row-value" style="color:${c}" onclick="copyVal(this)">${lum.toFixed(4)}</span></div>
+    `;
+  }
+
+  function copyVal(el) {
+    navigator.clipboard.writeText(el.textContent).then(() => showToast('Copied!'));
+  }
+
+  function showToast(msg) {
+    toastEl.textContent = msg;
+    toastEl.classList.add('show');
+    setTimeout(() => toastEl.classList.remove('show'), 1600);
+  }
+
+  function randomHex() {
+    return '#' + Math.floor(Math.random()*16777215).toString(16).padStart(6, '0');
+  }
+
+  // ─── LIGHTNESS SLIDERS ───
+  const fgLightnessSlider = document.getElementById('fgLightness');
+  const fgLightnessVal = document.getElementById('fgLightnessVal');
+  const fgLightnessTrack = document.getElementById('fgLightnessTrack');
+  const bgLightnessSlider = document.getElementById('bgLightness');
+  const bgLightnessVal = document.getElementById('bgLightnessVal');
+  const bgLightnessTrack = document.getElementById('bgLightnessTrack');
+
+  // Store base hue/sat for each side
+  let fgBaseH = 240, fgBaseS = 100;
+  let bgBaseH = 0, bgBaseS = 0;
+
+  function hslToHexColor(h, s, l) {
+    s /= 100; l /= 100;
+    const a = s * Math.min(l, 1 - l);
+    const f = n => { const k = (n + h / 30) % 12; return l - a * Math.max(-1, Math.min(k - 3, 9 - k, 1)); };
+    return '#' + [f(0), f(8), f(4)].map(x => Math.round(x * 255).toString(16).padStart(2, '0')).join('');
+  }
+
+  function updateLightnessTrack(target) {
+    const h = target === 'fg' ? fgBaseH : bgBaseH;
+    const s = target === 'fg' ? fgBaseS : bgBaseS;
+    const track = target === 'fg' ? fgLightnessTrack : bgLightnessTrack;
+    const stops = [];
+    for (let i = 0; i <= 100; i += 5) {
+      stops.push(`hsl(${h}, ${s}%, ${i}%)`);
+    }
+    track.style.background = `linear-gradient(to right, ${stops.join(', ')})`;
+  }
+
+  function syncLightnessFromHex(target, hex) {
+    const rgb = hexToRgb(hex);
+    const hsl = rgbToHsl(rgb.r, rgb.g, rgb.b);
+    if (target === 'fg') {
+      fgBaseH = hsl.h; fgBaseS = hsl.s;
+      fgLightnessSlider.value = hsl.l;
+      fgLightnessVal.textContent = hsl.l + '%';
+    } else {
+      bgBaseH = hsl.h; bgBaseS = hsl.s;
+      bgLightnessSlider.value = hsl.l;
+      bgLightnessVal.textContent = hsl.l + '%';
+    }
+    updateLightnessTrack(target);
+  }
+
+  function onLightnessChange(target) {
+    lightnessChanging = true;
+    const slider = target === 'fg' ? fgLightnessSlider : bgLightnessSlider;
+    const valEl = target === 'fg' ? fgLightnessVal : bgLightnessVal;
+    const l = parseInt(slider.value);
+    valEl.textContent = l + '%';
+    const h = target === 'fg' ? fgBaseH : bgBaseH;
+    const s = target === 'fg' ? fgBaseS : bgBaseS;
+    const newHex = hslToHexColor(h, s, l);
+    if (target === 'fg') {
+      fgColor = newHex;
+      fgHexInput.value = newHex.slice(1).toUpperCase();
+      syncPickerFromHex('fg', fgColor);
+    } else {
+      bgColor = newHex;
+      bgHexInput.value = newHex.slice(1).toUpperCase();
+      syncPickerFromHex('bg', bgColor);
+    }
+    // Still sync the OTHER slider's track
+    updateLightnessTrack(target);
+    update();
+    lightnessChanging = false;
+  }
+
+  fgLightnessSlider.addEventListener('input', () => onLightnessChange('fg'));
+  bgLightnessSlider.addEventListener('input', () => onLightnessChange('bg'));
+
+  // Event listeners
+  fgHexInput.addEventListener('input', e => {
+    let val = e.target.value.replace(/[^0-9a-fA-F]/g, '').slice(0, 6);
+    e.target.value = val.toUpperCase();
+    if (val.length === 6) {
+      fgColor = '#' + val;
+      syncPickerFromHex('fg', fgColor);
+      update();
+    }
+  });
+  bgHexInput.addEventListener('input', e => {
+    let val = e.target.value.replace(/[^0-9a-fA-F]/g, '').slice(0, 6);
+    e.target.value = val.toUpperCase();
+    if (val.length === 6) {
+      bgColor = '#' + val;
+      syncPickerFromHex('bg', bgColor);
+      update();
+    }
+  });
+
+  document.getElementById('fgRandom').addEventListener('click', () => {
+    fgColor = randomHex();
+    fgHexInput.value = fgColor.replace('#', '').toUpperCase();
+    syncPickerFromHex('fg', fgColor);
+    update();
+  });
+  document.getElementById('bgRandom').addEventListener('click', () => {
+    bgColor = randomHex();
+    bgHexInput.value = bgColor.replace('#', '').toUpperCase();
+    syncPickerFromHex('bg', bgColor);
+    update();
+  });
+
+  document.getElementById('swapBtn').addEventListener('click', () => {
+    [fgColor, bgColor] = [bgColor, fgColor];
+    fgHexInput.value = fgColor.replace('#', '').toUpperCase();
+    bgHexInput.value = bgColor.replace('#', '').toUpperCase();
+    syncPickerFromHex('fg', fgColor);
+    syncPickerFromHex('bg', bgColor);
+    update();
+  });
+
+  // ─── SAVED COMBINATIONS ───
+  const savedCombos = [];
+  const MAX_COMBOS = 10;
+  const savedGrid = document.getElementById('savedGrid');
+  const savedCount = document.getElementById('savedCount');
+  const saveBtn = document.getElementById('saveComboBtn');
+
+  function renderSavedCombos() {
+    // Remove all combo elements (keep save button)
+    savedGrid.querySelectorAll('.saved-combo').forEach(el => el.remove());
+
+    savedCombos.forEach((combo, i) => {
+      const el = document.createElement('div');
+      el.className = 'saved-combo';
+      el.style.background = combo.bg;
+      el.style.color = combo.fg;
+      el.innerHTML = `Aa
+        <button class="saved-combo-delete" data-index="${i}" title="Remove">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+        </button>
+      `;
+      // Click to load this combo
+      el.addEventListener('click', (e) => {
+        if (e.target.closest('.saved-combo-delete')) return;
+        fgColor = combo.fg;
+        bgColor = combo.bg;
+        fgHexInput.value = combo.fg.slice(1).toUpperCase();
+        bgHexInput.value = combo.bg.slice(1).toUpperCase();
+        syncPickerFromHex('fg', fgColor);
+        syncPickerFromHex('bg', bgColor);
+        update();
+      });
+      // Delete button
+      el.querySelector('.saved-combo-delete').addEventListener('click', (e) => {
+        e.stopPropagation();
+        savedCombos.splice(i, 1);
+        renderSavedCombos();
+      });
+      savedGrid.insertBefore(el, saveBtn);
+    });
+
+    savedCount.textContent = savedCombos.length + ' / ' + MAX_COMBOS;
+    if (savedCombos.length >= MAX_COMBOS) {
+      saveBtn.classList.add('disabled');
+    } else {
+      saveBtn.classList.remove('disabled');
+    }
+  }
+
+  saveBtn.addEventListener('click', () => {
+    if (savedCombos.length >= MAX_COMBOS) return;
+    // Check for duplicates
+    const exists = savedCombos.some(c => c.fg === fgColor && c.bg === bgColor);
+    if (exists) { showToast('Already saved'); return; }
+    savedCombos.push({ fg: fgColor, bg: bgColor });
+    renderSavedCombos();
+    showToast('Combination saved');
+  });
+
+  // Init pickers
+  initPicker('fg');
+  initPicker('bg');
+
+  // Init
+  update();
+</script>
+</body>
+</html>
